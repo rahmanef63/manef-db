@@ -18,9 +18,9 @@ services:
       AWS_S3_FORCE_PATH_STYLE: ${AWS_S3_FORCE_PATH_STYLE:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
-      CONVEX_CLOUD_ORIGIN: ${CONVEX_CLOUD_ORIGIN:-https://ggdb.rahmanef.com}
+      CONVEX_CLOUD_ORIGIN: ${CONVEX_CLOUD_ORIGIN:-https://dbgg.rahmanef.com}
       CONVEX_RELEASE_VERSION_DEV: ${CONVEX_RELEASE_VERSION_DEV:-}
-      CONVEX_SITE_ORIGIN: ${CONVEX_SITE_ORIGIN:-https://ggdbsite.rahmanef.com}
+      CONVEX_SITE_ORIGIN: ${CONVEX_SITE_ORIGIN:-https://dbggsite.rahmanef.com}
       DATABASE_URL: ${DATABASE_URL:-}
       DISABLE_BEACON: ${DISABLE_BEACON:-}
       DISABLE_METRICS_ENDPOINT: ${DISABLE_METRICS_ENDPOINT:-true}
@@ -55,13 +55,13 @@ services:
       labels:
         - traefik.enable=true
         - traefik.docker.network=dokploy-network
-        - traefik.http.routers.convex-api.rule=Host(`${CONVEX_API_DOMAIN:-ggdb.rahmanef.com}`)
+        - traefik.http.routers.convex-api.rule=Host(`${CONVEX_API_DOMAIN:-dbgg.rahmanef.com}`)
         - traefik.http.routers.convex-api.entrypoints=websecure
         - traefik.http.routers.convex-api.tls=true
         - traefik.http.routers.convex-api.tls.certresolver=letsencrypt
         - traefik.http.routers.convex-api.service=convex-api
         - traefik.http.services.convex-api.loadbalancer.server.port=3210
-        - traefik.http.routers.convex-site.rule=Host(`${CONVEX_SITE_DOMAIN:-ggdbsite.rahmanef.com}`)
+        - traefik.http.routers.convex-site.rule=Host(`${CONVEX_SITE_DOMAIN:-dbggsite.rahmanef.com}`)
         - traefik.http.routers.convex-site.entrypoints=websecure
         - traefik.http.routers.convex-site.tls=true
         - traefik.http.routers.convex-site.tls.certresolver=letsencrypt
@@ -74,7 +74,7 @@ services:
     stop_grace_period: 10s
     stop_signal: SIGINT
     environment:
-      NEXT_PUBLIC_DEPLOYMENT_URL: ${NEXT_PUBLIC_DEPLOYMENT_URL:-https://ggdb.rahmanef.com}
+      NEXT_PUBLIC_DEPLOYMENT_URL: ${NEXT_PUBLIC_DEPLOYMENT_URL:-https://dbgg.rahmanef.com}
       NEXT_PUBLIC_LOAD_MONACO_INTERNALLY: ${NEXT_PUBLIC_LOAD_MONACO_INTERNALLY:-}
     depends_on:
       convex-backend:
@@ -88,7 +88,7 @@ services:
       labels:
         - traefik.enable=true
         - traefik.docker.network=dokploy-network
-        - traefik.http.routers.convex-dashboard.rule=Host(`${CONVEX_DASHBOARD_DOMAIN:-ggdbdash.rahmanef.com}`)
+        - traefik.http.routers.convex-dashboard.rule=Host(`${CONVEX_DASHBOARD_DOMAIN:-dbggdash.rahmanef.com}`)
         - traefik.http.routers.convex-dashboard.entrypoints=websecure
         - traefik.http.routers.convex-dashboard.tls=true
         - traefik.http.routers.convex-dashboard.tls.certresolver=letsencrypt

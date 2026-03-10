@@ -10,11 +10,11 @@ This repo now supports two deployment modes:
 2. `docker-compose.selfhost.yml`
    - Runs the official self-hosted Convex backend and dashboard in Dokploy
 
-## Why the current `ggdb.rahmanef.com` path fails
+## Why the current `dbgg.rahmanef.com` path fails
 
 Current audit from local machine:
 
-- `ggdb.rahmanef.com` resolves
+- `dbgg.rahmanef.com` resolves
 - HTTPS only works with `curl -k`
 - without skipping verification, TLS fails with `SEC_E_UNTRUSTED_ROOT`
 - `/healthz` returns `404 page not found`, which means traffic is not hitting the
@@ -22,7 +22,7 @@ Current audit from local machine:
 
 So the current cloud+proxy issue is a combination of:
 
-1. untrusted TLS certificate chain on `ggdb.rahmanef.com`
+1. untrusted TLS certificate chain on `dbgg.rahmanef.com`
 2. Dokploy/Traefik routing not landing on the intended proxy container
 
 `docker-compose.yml` now includes Traefik labels so Dokploy can route it
@@ -38,9 +38,9 @@ Official Convex self-hosting exposes:
 
 Recommended public routing:
 
-- `https://ggdb.rahmanef.com` -> backend/API (`3210`)
-- `https://ggdbsite.rahmanef.com` -> site proxy / HTTP actions (`3211`)
-- `https://ggdbdash.rahmanef.com` -> Convex dashboard (`6791`)
+- `https://dbgg.rahmanef.com` -> backend/API (`3210`)
+- `https://dbggsite.rahmanef.com` -> site proxy / HTTP actions (`3211`)
+- `https://dbggdash.rahmanef.com` -> Convex dashboard (`6791`)
 
 ## Dokploy setup
 
@@ -66,7 +66,7 @@ Then, on the machine where you run Convex CLI for this project, set in
 `manef-db/.env.local`:
 
 ```env
-CONVEX_SELF_HOSTED_URL=https://ggdb.rahmanef.com
+CONVEX_SELF_HOSTED_URL=https://dbgg.rahmanef.com
 CONVEX_SELF_HOSTED_ADMIN_KEY=<generated-admin-key>
 ```
 
@@ -83,14 +83,14 @@ npm run codegen
 For production:
 
 ```env
-NEXT_PUBLIC_CONVEX_URL=https://ggdb.rahmanef.com
+NEXT_PUBLIC_CONVEX_URL=https://dbgg.rahmanef.com
 CONVEX_SERVER_URL=
 ```
 
 For temporary local fallback while TLS is still being fixed:
 
 ```env
-CONVEX_SERVER_URL=https://ggdb.rahmanef.com
+CONVEX_SERVER_URL=https://dbgg.rahmanef.com
 ```
 
 But ideally `CONVEX_SERVER_URL` should not be needed once the public certificate

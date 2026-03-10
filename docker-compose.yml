@@ -3,7 +3,7 @@ services:
     build:
       context: .
     environment:
-      PUBLIC_DB_DOMAIN: ${PUBLIC_DB_DOMAIN:-ggdb.rahmanef.com}
+      PUBLIC_DB_DOMAIN: ${PUBLIC_DB_DOMAIN:-dbgg.rahmanef.com}
       UPSTREAM_CONVEX_URL: ${UPSTREAM_CONVEX_URL}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
@@ -20,7 +20,7 @@ services:
       labels:
         - traefik.enable=true
         - traefik.docker.network=dokploy-network
-        - traefik.http.routers.manef-db-proxy.rule=Host(`${PUBLIC_DB_DOMAIN:-ggdb.rahmanef.com}`)
+        - traefik.http.routers.manef-db-proxy.rule=Host(`${PUBLIC_DB_DOMAIN:-dbgg.rahmanef.com}`)
         - traefik.http.routers.manef-db-proxy.entrypoints=websecure
         - traefik.http.routers.manef-db-proxy.tls=true
         - traefik.http.routers.manef-db-proxy.tls.certresolver=letsencrypt

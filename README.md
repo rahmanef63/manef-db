@@ -14,10 +14,10 @@ Convex backend repo for Manef.
 2. Configure Convex envs and deployment as needed.
 3. Start the backend with `npm run dev`.
 
-## Docker proxy for `ggdb.rahmanef.com`
+## Docker proxy for `dbgg.rahmanef.com`
 
 This repo also includes a lightweight Nginx container to front the hosted
-Convex deployment on a dedicated domain such as `ggdb.rahmanef.com`.
+Convex deployment on a dedicated domain such as `dbgg.rahmanef.com`.
 
 Use it when:
 
@@ -27,7 +27,7 @@ Use it when:
 
 Required environment variables:
 
-- `PUBLIC_DB_DOMAIN=ggdb.rahmanef.com`
+- `PUBLIC_DB_DOMAIN=dbgg.rahmanef.com`
 - `UPSTREAM_CONVEX_URL=https://<your-convex-deployment>.convex.cloud`
 
 Run locally:
@@ -46,17 +46,17 @@ Important:
 
 - This container is a reverse proxy, not a self-hosted Convex database.
 - If you use Convex Pro custom domains, that is the cleaner final setup. In that
-  case `ggdb.rahmanef.com` should be configured directly in Convex, and this
+  case `dbgg.rahmanef.com` should be configured directly in Convex, and this
   proxy can be removed.
 
 Frontend note:
 
-- `manef-ui` should use `NEXT_PUBLIC_CONVEX_URL=https://ggdb.rahmanef.com`
+- `manef-ui` should use `NEXT_PUBLIC_CONVEX_URL=https://dbgg.rahmanef.com`
   once this domain is active.
 
 Current audit result:
 
-- `ggdb.rahmanef.com` resolves
+- `dbgg.rahmanef.com` resolves
 - TLS chain is currently untrusted from local machine
 - `/healthz` and `/version` are not reaching this proxy yet, which points to a
   Dokploy/Traefik routing issue in the active deployment
@@ -80,9 +80,9 @@ This follows the official Convex self-hosting layout:
 
 Recommended public domains:
 
-- `ggdb.rahmanef.com`
-- `ggdbsite.rahmanef.com`
-- `ggdbdash.rahmanef.com`
+- `dbgg.rahmanef.com`
+- `dbggsite.rahmanef.com`
+- `dbggdash.rahmanef.com`
 
 ## Dokploy troubleshooting
 
