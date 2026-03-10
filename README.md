@@ -2,6 +2,10 @@
 
 Convex backend repo for Manef.
 
+## Current status
+
+- [Deployment status 2026-03-11](./DEPLOYMENT_STATUS_2026-03-11.md)
+
 ## Responsibilities
 
 - Owns `convex/` schema, queries, mutations, actions, and generated API types.
