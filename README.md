@@ -54,6 +54,36 @@ Frontend note:
 - `manef-ui` should use `NEXT_PUBLIC_CONVEX_URL=https://ggdb.rahmanef.com`
   once this domain is active.
 
+Current audit result:
+
+- `ggdb.rahmanef.com` resolves
+- TLS chain is currently untrusted from local machine
+- `/healthz` and `/version` are not reaching this proxy yet, which points to a
+  Dokploy/Traefik routing issue in the active deployment
+
+This repo's `docker-compose.yml` now includes Traefik labels to make the
+cloud+proxy path routable in Dokploy.
+
+## Self-hosted Convex option
+
+If you want to stop using Convex Cloud entirely, use the self-hosted stack in:
+
+- `docker-compose.selfhost.yml`
+- `.env.selfhost.example`
+- `SELF_HOSTED_DOKPLOY.md`
+
+This follows the official Convex self-hosting layout:
+
+- backend/API on `3210`
+- site proxy / HTTP actions on `3211`
+- dashboard on `6791`
+
+Recommended public domains:
+
+- `ggdb.rahmanef.com`
+- `ggdbsite.rahmanef.com`
+- `ggdbdash.rahmanef.com`
+
 ## Dokploy troubleshooting
 
 If Dokploy shows:

@@ -2,8 +2,31 @@ services:
   manef-db-proxy:
     build:
       context: .
-    ports:
-      - "8080:8080"
     environment:
       PUBLIC_DB_DOMAIN: ${PUBLIC_DB_DOMAIN:-ggdb.rahmanef.com}
       UPSTREAM_CONVEX_URL: ${UPSTREAM_CONVEX_URL}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - dokploy-network
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=dokploy-network
+        - traefik.http.routers.manef-db-proxy.rule=Host(`${PUBLIC_DB_DOMAIN:-ggdb.rahmanef.com}`)
+        - traefik.http.routers.manef-db-proxy.entrypoints=websecure
+        - traefik.http.routers.manef-db-proxy.tls=true
+        - traefik.http.routers.manef-db-proxy.tls.certresolver=letsencrypt
+        - traefik.http.services.manef-db-proxy.loadbalancer.server.port=8080
+    restart: unless-stopped
+
+networks:
+  dokploy-network:
+    external: true
