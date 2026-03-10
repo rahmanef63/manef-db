@@ -6,10 +6,11 @@ const audience = process.env.CONVEX_AUTH_AUDIENCE ?? "manef-ui";
 export default {
   providers: [
     {
-      domain: issuer,
+      type: "customJwt",
+      issuer,
       applicationID: audience,
       jwks: `${issuer}/.well-known/jwks.json`,
-      type: "customJwt",
+      algorithm: "RS256",
     },
   ],
 };
