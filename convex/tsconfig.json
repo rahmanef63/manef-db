@@ -16,6 +16,9 @@
       "dom",
       "ESNext.Array"
     ],
+    "types": [
+      "node"
+    ],
     "forceConsistentCasingInFileNames": true,
     "allowSyntheticDefaultImports": true,
     "module": "ESNext",

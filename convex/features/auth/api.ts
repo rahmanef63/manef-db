@@ -24,7 +24,7 @@ function getAdminConfig() {
   const name = process.env.AUTH_ADMIN_NAME ?? email.split("@")[0] ?? "admin";
   const roles = (process.env.AUTH_ADMIN_ROLES ?? "admin")
     .split(",")
-    .map((role) => role.trim())
+    .map((role: string) => role.trim())
     .filter(Boolean);
   return { email, name, password, roles };
 }

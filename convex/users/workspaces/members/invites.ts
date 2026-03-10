@@ -156,25 +156,27 @@ async function sendInviteEmail({
   }
 
   const resend = new Resend(process.env.RESEND_API_KEY);
+  const acceptInviteUrl = `${process.env.HOSTED_URL}/dashboard?${INVITE_PARAM}=${inviteId}`;
+  const safeInviterEmail = escapeHtml(inviterEmail);
+  const safeWorkspaceName = escapeHtml(workspaceName);
   const { error } = await resend.emails.send({
     from: "My App <onboarding@resend.dev>",
     to: [process.env.OVERRIDE_INVITE_EMAIL ?? email],
     subject: `${inviterEmail} invited you to join them in My App`,
-    react: (
-      <div>
-        <strong>{inviterEmail}</strong> invited you to join workspace{" "}
-        <strong>{workspaceName}</strong> in My App. Click{" "}
-        <a
-          href={`${process.env.HOSTED_URL}/dashboard?${INVITE_PARAM}=${inviteId}`}
-        >
-          here to accept
-        </a>{" "}
-        or log in to My App.
-      </div>
-    ),
+    html: `<div><strong>${safeInviterEmail}</strong> invited you to join workspace <strong>${safeWorkspaceName}</strong> in My App. Click <a href="${acceptInviteUrl}">here to accept</a> or log in to My App.</div>`,
+    text: `${inviterEmail} invited you to join workspace ${workspaceName} in My App. Accept the invitation here: ${acceptInviteUrl}`,
   });
 
   if (error) {
     throw new ConvexError("Could not send invitation email");
   }
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
