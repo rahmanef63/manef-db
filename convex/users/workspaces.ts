@@ -1,6 +1,9 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "../functions";
-import { getRole, viewerHasPermissionX } from "../permissions";
+import {
+  ensureDefaultRolesSetup,
+  viewerHasPermissionX,
+} from "../permissions";
 import { Ent, QueryCtx } from "../types";
 import { slugify } from "../utils";
 import { createMember } from "./workspaces/members";
@@ -46,10 +49,11 @@ export const create = mutation({
     const workspaceId = await ctx
       .table("workspaces")
       .insert({ name: normalizedName, isPersonal: false, slug });
+    const adminRole = await ensureDefaultRolesSetup(ctx);
     await createMember(ctx, {
       workspaceId,
       user: ctx.viewerX(),
-      roleId: (await getRole(ctx, "Admin"))._id,
+      roleId: adminRole._id,
     });
     return slug;
   },

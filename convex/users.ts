@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import { internalMutation, mutation } from "./functions";
-import { getRole } from "./permissions";
+import { ensureDefaultRolesSetup } from "./permissions";
 import { defaultToAccessWorkspaceSlug, getUniqueSlug } from "./users/workspaces";
 import { createMember } from "./users/workspaces/members";
 import { createAppError } from "../shared/app-errors.js";
@@ -109,11 +109,12 @@ async function ensurePersonalWorkspace(ctx: any, user: any, email: string) {
       name: buildPersonalWorkspaceName(email),
       slug,
     });
+  const adminRole = await ensureDefaultRolesSetup(ctx);
 
   await createMember(ctx, {
     workspaceId,
     user,
-    roleId: (await getRole(ctx, "Admin"))._id,
+    roleId: adminRole._id,
   });
 
   const workspace = await ctx.table("workspaces").get(workspaceId);
