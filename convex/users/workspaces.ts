@@ -1,9 +1,10 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation, query } from "../functions";
 import { getRole, viewerHasPermissionX } from "../permissions";
 import { Ent, QueryCtx } from "../types";
 import { slugify } from "../utils";
 import { createMember } from "./workspaces/members";
+import { createAppError } from "../../shared/app-errors.js";
 
 export async function defaultToAccessWorkspaceSlug(viewer: Ent<"users">) {
   const workspaces = await viewer.edge("members").map((member: any) => member.edge("workspace").doc());
@@ -40,10 +41,11 @@ export const create = mutation({
     name: v.string(),
   },
   async handler(ctx, { name }) {
-    const slug = await getUniqueSlug(ctx, name);
+    const normalizedName = normalizeWorkspaceName(name);
+    const slug = await getUniqueSlug(ctx, normalizedName);
     const workspaceId = await ctx
       .table("workspaces")
-      .insert({ name, isPersonal: false, slug });
+      .insert({ name: normalizedName, isPersonal: false, slug });
     await createMember(ctx, {
       workspaceId,
       user: ctx.viewerX(),
@@ -61,7 +63,7 @@ export const update = mutation({
   async handler(ctx, { workspaceId, name }) {
     await viewerHasPermissionX(ctx, workspaceId, "Manage Workspace");
     const workspace = await ctx.table("workspaces").getX(workspaceId);
-    await workspace.patch({ name });
+    await workspace.patch({ name: normalizeWorkspaceName(name) });
   },
 });
 
@@ -80,7 +82,7 @@ export const deleteWorkspace = mutation({
 });
 
 export async function getUniqueSlug(ctx: QueryCtx, name: string) {
-  const base = slugify(name);
+  const base = slugify(name) || "workspace";
   let slug;
   let n = 0;
   for (; ;) {
@@ -92,4 +94,19 @@ export async function getUniqueSlug(ctx: QueryCtx, name: string) {
     n++;
   }
   return slug;
+}
+
+function normalizeWorkspaceName(name: string) {
+  const normalized = name.trim().replace(/\s+/g, " ");
+  if (normalized.length === 0) {
+    throw new ConvexError(createAppError("WORKSPACE_NAME_REQUIRED"));
+  }
+  if (normalized.length < 3) {
+    throw new ConvexError(
+      createAppError("WORKSPACE_NAME_TOO_SHORT", {
+        meta: { minLength: 3 },
+      })
+    );
+  }
+  return normalized;
 }

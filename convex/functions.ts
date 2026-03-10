@@ -12,6 +12,8 @@ import {
   mutation as baseMutation,
   query as baseQuery,
 } from "./_generated/server";
+import { ConvexError } from "convex/values";
+import { createAppError } from "../shared/app-errors.js";
 import { entDefinitions } from "./schema";
 
 // Explicitly type the entDefinitions to avoid TypeScript recursion depth issues
@@ -37,7 +39,7 @@ export const query = customQuery(
       viewer,
       viewerX: () => {
         if (viewer === null) {
-          throw new Error("Expected authenticated viewer");
+          throw new ConvexError(createAppError("COMMON_UNAUTHENTICATED"));
         }
         return viewer;
       },
@@ -57,7 +59,7 @@ export const internalQuery = customQuery(
       viewer,
       viewerX: () => {
         if (viewer === null) {
-          throw new Error("Expected authenticated viewer");
+          throw new ConvexError(createAppError("COMMON_UNAUTHENTICATED"));
         }
         return viewer;
       },
@@ -77,7 +79,7 @@ export const mutation = customMutation(
       viewer,
       viewerX: () => {
         if (viewer === null) {
-          throw new Error("Expected authenticated viewer");
+          throw new ConvexError(createAppError("COMMON_UNAUTHENTICATED"));
         }
         return viewer;
       },
@@ -97,7 +99,7 @@ export const internalMutation = customMutation(
       viewer,
       viewerX: () => {
         if (viewer === null) {
-          throw new Error("Expected authenticated viewer");
+          throw new ConvexError(createAppError("COMMON_UNAUTHENTICATED"));
         }
         return viewer;
       },

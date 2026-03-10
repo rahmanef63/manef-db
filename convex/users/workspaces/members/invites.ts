@@ -10,6 +10,7 @@ import {
 } from "../../../permissions";
 import { makeFunctionReference } from "convex/server";
 import type { Ent } from "../../../types";
+import { createAppError } from "../../../../shared/app-errors.js";
 
 const prepareInviteRef = makeFunctionReference<
   "mutation",
@@ -149,10 +150,11 @@ async function sendInviteEmail({
     process.env.RESEND_API_KEY === undefined ||
     process.env.HOSTED_URL === undefined
   ) {
-    console.error(
-      "Set up `RESEND_API_KEY` and `HOSTED_URL` to send invite emails"
+    throw new ConvexError(
+      createAppError("MEMBERS_INVITE_CONFIG_MISSING", {
+        details: ["RESEND_API_KEY dan HOSTED_URL wajib diisi di runtime manef-db."],
+      })
     );
-    return;
   }
 
   const resend = new Resend(process.env.RESEND_API_KEY);
@@ -168,7 +170,11 @@ async function sendInviteEmail({
   });
 
   if (error) {
-    throw new ConvexError("Could not send invitation email");
+    throw new ConvexError(
+      createAppError("MEMBERS_INVITE_EMAIL_FAILED", {
+        meta: { email, workspaceName },
+      })
+    );
   }
 }
 

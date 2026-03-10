@@ -9,6 +9,7 @@ import { Ent, MutationCtx, QueryCtx } from "../../types";
 import { paginationOptsValidator } from "convex/server";
 import { emptyPage, normalizeStringForSearch } from "../../utils";
 import { Id } from "../../_generated/dataModel";
+import { createAppError } from "../../../shared/app-errors.js";
 
 export const viewerPermissions = query({
   args: {
@@ -110,7 +111,7 @@ async function checkAnotherAdminExists(ctx: QueryCtx, member: Ent<"members">) {
     )
     .first();
   if (otherAdmin === null) {
-    throw new ConvexError("There must be at least one admin left on the workspace");
+    throw new ConvexError(createAppError("MEMBERS_LAST_ADMIN"));
   }
 }
 

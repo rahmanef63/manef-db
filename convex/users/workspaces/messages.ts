@@ -1,7 +1,8 @@
 import { paginationOptsValidator } from "convex/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { mutation, query } from "../../functions";
 import { viewerHasPermission, viewerWithPermissionX } from "../../permissions";
+import { createAppError } from "../../../shared/app-errors.js";
 
 export const list = query({
   args: {
@@ -48,7 +49,7 @@ export const create = mutation({
   handler: async (ctx, { workspaceId, text }) => {
     const member = await viewerWithPermissionX(ctx, workspaceId, "Contribute");
     if (text.trim().length === 0) {
-      throw new Error("Message must not be empty");
+      throw new ConvexError(createAppError("MESSAGES_EMPTY"));
     }
     await ctx.table("messages").insert({
       text,

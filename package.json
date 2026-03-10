@@ -15,9 +15,17 @@
       "types": "./dataModel.d.ts",
       "default": "./api.js"
     },
+    "./errors": {
+      "types": "./errors.d.ts",
+      "default": "./errors.js"
+    },
     "./permissions": {
       "types": "./permissions.d.ts",
       "default": "./api.js"
+    },
+    "./workspaces": {
+      "types": "./workspaces.d.ts",
+      "default": "./workspaces.js"
     }
   },
   "files": [
@@ -25,8 +33,12 @@
     "api.js",
     "convex",
     "dataModel.d.ts",
+    "errors.d.ts",
+    "errors.js",
     "permissions.d.ts",
-    "shared"
+    "shared",
+    "workspaces.d.ts",
+    "workspaces.js"
   ],
   "scripts": {
     "dev": "convex dev --typecheck=disable",

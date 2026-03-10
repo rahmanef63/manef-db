@@ -1,6 +1,7 @@
-import { Infer, v } from "convex/values";
+import { ConvexError, Infer, v } from "convex/values";
 import { MutationCtx, QueryCtx } from "./types";
 import { Id } from "./_generated/dataModel";
+import { createAppError } from "../shared/app-errors.js";
 
 export type { Permission, Role } from "./permissions_schema";
 import { Permission, Role } from "./permissions_schema";
@@ -51,7 +52,12 @@ export async function viewerWithPermissionX(
 ) {
   const member = await viewerWithPermission(ctx, workspaceId, name);
   if (member === null) {
-    throw new Error(`Viewer does not have the permission "${name}"`);
+    throw new ConvexError(
+      createAppError("COMMON_PERMISSION_DENIED", {
+        details: [`Permission required: ${name}`],
+        meta: { permission: name, workspaceId },
+      })
+    );
   }
   return member;
 }
