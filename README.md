@@ -54,6 +54,24 @@ Frontend note:
 - `manef-ui` should use `NEXT_PUBLIC_CONVEX_URL=https://ggdb.rahmanef.com`
   once this domain is active.
 
+## Dokploy troubleshooting
+
+If Dokploy shows:
+
+```text
+Initializing deployment
+Error: Github Provider not found
+```
+
+that is a Dokploy source-provider problem, not a repo build problem.
+
+Check:
+
+1. Dokploy GitHub provider exists and is active.
+2. The provider can access `rahmanef63/manef-db`.
+3. The app is linked to the correct provider and repo.
+4. Recreate the Dokploy app if it was created before the provider was fixed.
+
 ## Temporary local linking
 
 `manef-ui` currently depends on this repo via `file:../manef-db`.
