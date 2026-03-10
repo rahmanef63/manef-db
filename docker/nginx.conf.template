@@ -15,7 +15,8 @@ server {
     }
 
     location / {
-        proxy_pass ${UPSTREAM_CONVEX_URL};
+        set $convex_upstream ${UPSTREAM_CONVEX_URL};
+        proxy_pass $convex_upstream;
         proxy_http_version 1.1;
 
         # Important for Convex Cloud upstream behind TLS/CDN:
