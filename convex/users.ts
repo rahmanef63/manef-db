@@ -92,11 +92,7 @@ async function ensurePersonalWorkspace(ctx: any, user: any, email: string) {
     return existingSlug;
   }
 
-  const membership = await ctx
-    .table("members", "workspaceUser", (q: any) =>
-      q.eq("userId", user._id)
-    )
-    .first();
+  const membership = await user.edge("members").first();
   if (membership) {
     const workspaceId = membership.workspaceId;
     const workspace = await ctx.table("workspaces").get(workspaceId);

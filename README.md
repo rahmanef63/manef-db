@@ -14,6 +14,23 @@ Convex backend repo for Manef.
 2. Configure Convex envs and deployment as needed.
 3. Start the backend with `npm run dev`.
 
+## Convex release
+
+Container deploy in Dokploy does not publish Convex functions automatically.
+If you change files under `convex/`, you still need to run a Convex release step:
+
+```bash
+npm run deploy
+```
+
+For non-interactive environments or CI:
+
+```bash
+npm run deploy:ci
+```
+
+That maps to `convex deploy -y`.
+
 ## Docker proxy for `dbgg.rahmanef.com`
 
 This repo also includes a lightweight Nginx container to front the hosted
