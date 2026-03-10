@@ -30,7 +30,8 @@ const DEFAULT_ROLE_CONFIG: Record<
 };
 
 export async function getPermission(ctx: QueryCtx, name: Permission) {
-  return (await ctx.table("permissions").getX("name", name))._id;
+  const permission = await ctx.table("permissions").get("name", name);
+  return permission?._id ?? null;
 }
 
 export async function getRole(ctx: QueryCtx, name: Role) {
@@ -125,6 +126,11 @@ export async function viewerWithPermission(
   workspaceId: Id<"workspaces">,
   name: Permission
 ) {
+  const permissionId = await getPermission(ctx, name);
+  if (permissionId === null) {
+    return null;
+  }
+
   const member = await ctx
     .table("members", "workspaceUser", (q: any) =>
       q.eq("workspaceId", workspaceId).eq("userId", ctx.viewerX()._id)
@@ -135,7 +141,7 @@ export async function viewerWithPermission(
     !(await member
       .edge("role")
       .edge("permissions")
-      .has(await getPermission(ctx, name)))
+      .has(permissionId))
   ) {
     return null;
   }
