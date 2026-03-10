@@ -3,7 +3,7 @@ export const APP_ERROR_DEFINITIONS = {
     feature: "auth",
     title: "Layanan login sedang tidak tersedia",
     description:
-      "Aplikasi tidak bisa menjangkau backend autentikasi. Coba lagi beberapa saat. Jika berulang, periksa koneksi backend dan TLS domain ggdb.",
+      "Aplikasi tidak bisa menjangkau backend autentikasi. Coba lagi beberapa saat. Jika berulang, periksa koneksi backend dan TLS domain dbgg.",
   },
   COMMON_UNAUTHENTICATED: {
     feature: "common",

@@ -113,7 +113,20 @@ async function getViewerQuery(ctx: BaseQueryCtx) {
     return null;
   }
   const table = createTable(ctx);
-  return await table("users").get("tokenIdentifier", identity.tokenIdentifier);
+  const byTokenIdentifier = await table(
+    "users",
+  ).get("tokenIdentifier", identity.tokenIdentifier);
+  if (byTokenIdentifier !== null) {
+    return byTokenIdentifier;
+  }
+
+  const email =
+    typeof identity.email === "string" ? identity.email.toLowerCase() : undefined;
+  if (!email) {
+    return null;
+  }
+
+  return await table("users").get("email", email);
 }
 
 async function getViewerMutation(ctx: BaseMutationCtx) {
@@ -122,7 +135,26 @@ async function getViewerMutation(ctx: BaseMutationCtx) {
     return null;
   }
   const table = createTable(ctx);
-  return await table("users").get("tokenIdentifier", identity.tokenIdentifier);
+  const byTokenIdentifier = await table(
+    "users",
+  ).get("tokenIdentifier", identity.tokenIdentifier);
+  if (byTokenIdentifier !== null) {
+    return byTokenIdentifier;
+  }
+
+  const email =
+    typeof identity.email === "string" ? identity.email.toLowerCase() : undefined;
+  if (!email) {
+    return null;
+  }
+
+  const byEmail = await table("users").get("email", email);
+  if (byEmail === null) {
+    return null;
+  }
+
+  await byEmail.patch({ tokenIdentifier: identity.tokenIdentifier });
+  return byEmail;
 }
 
 export const scheduledDelete = scheduledDeleteFactory(entDefinitions);
