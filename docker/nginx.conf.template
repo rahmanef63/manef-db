@@ -3,6 +3,10 @@ server {
     server_name ${PUBLIC_DB_DOMAIN};
 
     client_max_body_size 25m;
+    # Force Docker DNS resolution over IPv4 to avoid noisy IPv6 upstream attempts
+    # when the host network has no IPv6 route to Convex Cloud/CDN addresses.
+    resolver 127.0.0.11 ipv6=off valid=300s;
+    resolver_timeout 5s;
 
     location = /healthz {
         access_log off;

@@ -65,6 +65,9 @@ HTTPS upstream note (critical):
 
 - Untuk `UPSTREAM_CONVEX_URL=https://...convex.cloud`, proxy harus mengirim SNI
   dan `Host` sesuai host upstream Convex.
+- Jika host Docker tidak punya jalur IPv6, pakai resolver Docker dengan
+  `ipv6=off` supaya Nginx tidak spam log `connect() to [2606:4700::...] failed`
+  sebelum fallback ke IPv4.
 - Jika image yang aktif belum membawa fix itu, container bisa sehat tetapi semua
   request runtime ke upstream gagal dengan TLS handshake error dan user melihat
   `502`.
