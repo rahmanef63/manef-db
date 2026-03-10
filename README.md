@@ -55,8 +55,19 @@ Dokploy domain/router port note (critical):
 
 - Container ini (sesuai `Dockerfile`) expose Nginx di **port 8080**.
 - Jika Dokploy `Domains -> Container Port` diarahkan ke port yang salah (mis. `3000`), hasilnya akan `502 Bad Gateway`.
+- Jika app dibuat di Dokploy dengan mode `Dockerfile`, router aktif datang dari
+  konfigurasi `Domains` Dokploy. Label Traefik di `docker-compose.yml` tidak
+  dipakai pada mode ini.
 - Untuk image lama/standar Nginx yang listen `80`, gunakan `80`.
 - Intinya: samakan `Container Port` Dokploy dengan port yang benar-benar listen di container aktif.
+
+HTTPS upstream note (critical):
+
+- Untuk `UPSTREAM_CONVEX_URL=https://...convex.cloud`, proxy harus mengirim SNI
+  dan `Host` sesuai host upstream Convex.
+- Jika image yang aktif belum membawa fix itu, container bisa sehat tetapi semua
+  request runtime ke upstream gagal dengan TLS handshake error dan user melihat
+  `502`.
 
 Run locally:
 
@@ -86,11 +97,14 @@ Current audit result:
 
 - `dbgg.rahmanef.com` resolves
 - TLS chain is currently untrusted from local machine
-- `/healthz` and `/version` are not reaching this proxy yet, which points to a
-  Dokploy/Traefik routing issue in the active deployment
+- Pada Dokploy mode `Dockerfile`, pastikan `Domains -> Container Port` diarahkan
+  ke `8080`, bukan `80`
+- Jika route sudah masuk ke container tetapi upstream masih gagal, cek log Nginx
+  untuk error TLS handshake ke `*.convex.cloud`
 
-This repo's `docker-compose.yml` now includes Traefik labels to make the
-cloud+proxy path routable in Dokploy.
+`docker-compose.yml` tetap berguna jika Anda benar-benar deploy repo ini sebagai
+Compose app. Untuk app Dokploy mode `Dockerfile`, source of truth routing ada di
+UI Dokploy, bukan di file compose repo.
 
 ## Self-hosted Convex option
 
