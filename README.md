@@ -51,6 +51,13 @@ Required environment variables:
 - `PUBLIC_DB_DOMAIN=dbgg.rahmanef.com`
 - `UPSTREAM_CONVEX_URL=https://<your-convex-deployment>.convex.cloud`
 
+Dokploy domain/router port note (critical):
+
+- Container ini (sesuai `Dockerfile`) expose Nginx di **port 8080**.
+- Jika Dokploy `Domains -> Container Port` diarahkan ke port yang salah (mis. `3000`), hasilnya akan `502 Bad Gateway`.
+- Untuk image lama/standar Nginx yang listen `80`, gunakan `80`.
+- Intinya: samakan `Container Port` Dokploy dengan port yang benar-benar listen di container aktif.
+
 Run locally:
 
 ```bash
