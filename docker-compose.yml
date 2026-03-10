@@ -1,0 +1,9 @@
+services:
+  manef-db-proxy:
+    build:
+      context: .
+    ports:
+      - "8080:8080"
+    environment:
+      PUBLIC_DB_DOMAIN: ${PUBLIC_DB_DOMAIN:-ggdb.rahmanef.com}
+      UPSTREAM_CONVEX_URL: ${UPSTREAM_CONVEX_URL}

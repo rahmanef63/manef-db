@@ -1,0 +1,45 @@
+{
+  "name": "@manef/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "exports": {
+    "./api": {
+      "types": "./api.d.ts",
+      "default": "./api.js"
+    },
+    "./dataModel": {
+      "types": "./dataModel.d.ts",
+      "default": "./api.js"
+    },
+    "./permissions": {
+      "types": "./permissions.d.ts",
+      "default": "./api.js"
+    }
+  },
+  "files": [
+    "api.d.ts",
+    "api.js",
+    "convex",
+    "dataModel.d.ts",
+    "permissions.d.ts",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "convex dev --typecheck=disable",
+    "codegen": "convex codegen",
+    "deploy": "convex deploy"
+  },
+  "dependencies": {
+    "convex": "^1.31.6",
+    "convex-ents": "^0.18.1",
+    "convex-helpers": "^0.1.27",
+    "resend": "^6.8.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}
