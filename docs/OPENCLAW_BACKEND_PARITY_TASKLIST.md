@@ -66,7 +66,12 @@ Tasks:
 - [ ] Pastikan create/update/delete agent punya jalur yang jelas:
   manual admin atau runtime mirror.
 - [ ] Hapus random `deployAgent` behavior untuk production path.
-- [ ] Tambahkan query detail agent dan query children/sub-agents.
+- [x] Tambahkan query detail agent dan query children/sub-agents.
+  Bukti:
+  - `getAgents` sekarang mengembalikan `workspacePath`, `agentDir`,
+    `boundChannels`, `sessionCount`, `childCount`, `ownerName`, `model`
+  - [api.ts](/home/rahman/projects/manef-db/convex/features/agents/api.ts)
+  - commit `3fd3851`
 - [ ] Tambahkan table atau metadata untuk parent-child agent relationship bila
   belum cukup diwakili oleh `workspaceTrees`.
 
@@ -220,7 +225,10 @@ Definition of done:
 
 ## Release validation
 
-- [ ] Jalankan publish functions ke production Convex.
+- [x] Jalankan publish functions ke production Convex.
+  Bukti:
+  - `npm run deploy:ci` berhasil publish ke `https://peaceful-dove-887.convex.cloud`
+  - deployment dilakukan setelah commit `3fd3851`
 - [ ] Jalankan mirror agents.
 - [ ] Jalankan mirror sessions.
 - [ ] Jalankan mirror channels.
