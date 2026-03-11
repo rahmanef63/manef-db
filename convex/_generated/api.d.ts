@@ -36,6 +36,7 @@ import type * as init from "../init.js";
 import type * as menu from "../menu.js";
 import type * as migrations from "../migrations.js";
 import type * as onboarding from "../onboarding.js";
+import type * as openclawNavigator from "../openclawNavigator.js";
 import type * as permissions from "../permissions.js";
 import type * as permissions_schema from "../permissions_schema.js";
 import type * as seed from "../seed.js";
@@ -85,6 +86,7 @@ declare const fullApi: ApiFromModules<{
   menu: typeof menu;
   migrations: typeof migrations;
   onboarding: typeof onboarding;
+  openclawNavigator: typeof openclawNavigator;
   permissions: typeof permissions;
   permissions_schema: typeof permissions_schema;
   seed: typeof seed;
