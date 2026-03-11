@@ -94,7 +94,16 @@ export const upsertChannel = mutation({
         label: v.optional(v.string()),
         configured: v.boolean(),
         running: v.boolean(),
+        linked: v.optional(v.boolean()),
+        connected: v.optional(v.boolean()),
         mode: v.optional(v.string()),
+        lastStartAt: v.optional(v.number()),
+        lastStopAt: v.optional(v.number()),
+        lastProbeAt: v.optional(v.number()),
+        lastConnectAt: v.optional(v.number()),
+        lastMessageAt: v.optional(v.number()),
+        lastError: v.optional(v.string()),
+        authAgeMs: v.optional(v.number()),
         config: v.optional(v.any()),
         tenantId: v.optional(v.string()),
     },
@@ -113,11 +122,100 @@ export const upsertChannel = mutation({
         }
         return await ctx.db.insert("channels", {
             ...args,
-            linked: false,
-            connected: false,
+            linked: args.linked ?? false,
+            connected: args.connected ?? false,
             createdAt: Date.now(),
             updatedAt: Date.now(),
         });
+    },
+});
+
+/**
+ * Bulk-sync channel configuration and allowlist mirrors from OpenClaw runtime.
+ */
+export const syncRuntimeChannels = mutation({
+    args: {
+        channels: v.array(
+            v.object({
+                channelId: v.string(),
+                type: v.string(),
+                label: v.optional(v.string()),
+                configured: v.boolean(),
+                running: v.boolean(),
+                linked: v.optional(v.boolean()),
+                connected: v.optional(v.boolean()),
+                mode: v.optional(v.string()),
+                lastStartAt: v.optional(v.number()),
+                lastStopAt: v.optional(v.number()),
+                lastProbeAt: v.optional(v.number()),
+                lastConnectAt: v.optional(v.number()),
+                lastMessageAt: v.optional(v.number()),
+                lastError: v.optional(v.string()),
+                authAgeMs: v.optional(v.number()),
+                config: v.optional(v.any()),
+                tenantId: v.optional(v.string()),
+                allowList: v.optional(v.array(v.string())),
+            })
+        ),
+    },
+    returns: v.object({ upserted: v.number(), allowListEntries: v.number() }),
+    handler: async (ctx, args) => {
+        const now = Date.now();
+        let upserted = 0;
+        let allowListEntries = 0;
+
+        for (const channel of args.channels) {
+            const {
+                allowList,
+                ...channelRecord
+            } = channel;
+
+            const existing = await ctx.db
+                .query("channels")
+                .withIndex("by_channelId", (q) => q.eq("channelId", channel.channelId))
+                .first();
+
+            let channelDocId;
+            if (existing) {
+                await ctx.db.patch(existing._id, {
+                    ...channelRecord,
+                    updatedAt: now,
+                });
+                channelDocId = existing._id;
+            } else {
+                channelDocId = await ctx.db.insert("channels", {
+                    ...channelRecord,
+                    linked: channelRecord.linked ?? false,
+                    connected: channelRecord.connected ?? false,
+                    createdAt: now,
+                    updatedAt: now,
+                });
+            }
+
+            const existingAllowList = await ctx.db
+                .query("channelAllowList")
+                .withIndex("by_channelId", (q) => q.eq("channelId", channel.channelId))
+                .collect();
+
+            for (const entry of existingAllowList) {
+                await ctx.db.delete(entry._id);
+            }
+
+            for (const pattern of allowList ?? []) {
+                await ctx.db.insert("channelAllowList", {
+                    channelId: channel.channelId,
+                    pattern,
+                    tenantId: channel.tenantId,
+                    createdAt: now,
+                });
+                allowListEntries++;
+            }
+
+            void channelDocId;
+            upserted++;
+        }
+
+        return { upserted, allowListEntries };
     },
 });
 

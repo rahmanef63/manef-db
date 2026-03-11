@@ -92,6 +92,57 @@ export const createSkill = mutation({
 });
 
 /**
+ * Create or update runtime-mirrored skills in bulk.
+ */
+export const syncRuntimeSkills = mutation({
+    args: {
+        skills: v.array(
+            v.object({
+                skillId: v.string(),
+                name: v.string(),
+                description: v.optional(v.string()),
+                source: v.string(),
+                enabled: v.boolean(),
+                version: v.optional(v.string()),
+                toolCount: v.optional(v.number()),
+                requiredApiKeys: v.optional(v.array(v.string())),
+                config: v.optional(v.any()),
+                tenantId: v.optional(v.string()),
+            })
+        ),
+    },
+    returns: v.object({ upserted: v.number() }),
+    handler: async (ctx, args) => {
+        const now = Date.now();
+        let upserted = 0;
+
+        for (const skill of args.skills) {
+            const existing = await ctx.db
+                .query("skills")
+                .withIndex("by_skillId", (q) => q.eq("skillId", skill.skillId))
+                .first();
+
+            if (existing) {
+                await ctx.db.patch(existing._id, {
+                    ...skill,
+                    updatedAt: now,
+                });
+            } else {
+                await ctx.db.insert("skills", {
+                    ...skill,
+                    createdAt: now,
+                    updatedAt: now,
+                });
+            }
+
+            upserted++;
+        }
+
+        return { upserted };
+    },
+});
+
+/**
  * Delete a skill.
  */
 export const deleteSkill = mutation({

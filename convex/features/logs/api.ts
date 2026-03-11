@@ -48,6 +48,7 @@ export const getRecentLogs = query({
  */
 export const writeLog = mutation({
     args: {
+        runtimeKey: v.optional(v.string()),
         level: v.string(),
         source: v.string(),
         message: v.string(),
@@ -60,6 +61,46 @@ export const writeLog = mutation({
             ...args,
             timestamp: Date.now(),
         });
+    },
+});
+
+/**
+ * Upsert runtime log entries in bulk using a stable runtime key.
+ */
+export const syncRuntimeLogs = mutation({
+    args: {
+        logs: v.array(
+            v.object({
+                runtimeKey: v.string(),
+                level: v.string(),
+                source: v.string(),
+                message: v.string(),
+                details: v.optional(v.any()),
+                timestamp: v.number(),
+                tenantId: v.optional(v.string()),
+            })
+        ),
+    },
+    returns: v.object({ upserted: v.number() }),
+    handler: async (ctx, args) => {
+        let upserted = 0;
+
+        for (const entry of args.logs) {
+            const existing = await ctx.db
+                .query("gatewayLogs")
+                .withIndex("by_runtimeKey", (q) => q.eq("runtimeKey", entry.runtimeKey))
+                .first();
+
+            if (existing) {
+                await ctx.db.patch(existing._id, entry);
+            } else {
+                await ctx.db.insert("gatewayLogs", entry);
+            }
+
+            upserted++;
+        }
+
+        return { upserted };
     },
 });
 

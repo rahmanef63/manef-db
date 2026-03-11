@@ -49,6 +49,38 @@ Penting:
 - setelah mengubah schema/query/mutation/action, jalankan `npm run deploy:ci`
   untuk publish functions ke Convex deployment aktif
 
+## OpenClaw runtime sync
+
+Repo ini sekarang punya jalur mirror runtime OpenClaw lokal -> Convex Cloud
+untuk beberapa panel yang dipakai `manef-ui`.
+
+Entry points:
+
+- `npm run sync:runtime:skills`
+- `npm run sync:runtime:channels`
+- `npm run sync:runtime:logs`
+- `npm run sync:runtime`
+
+Source runtime yang aktif saat ini:
+
+- `openclaw skills list --json`
+- `~/.openclaw/openclaw.json`
+- `journalctl --user-unit openclaw-gateway -o json`
+
+Scheduler VPS:
+
+- service:
+  [scripts/systemd/manef-openclaw-runtime-sync.service](./scripts/systemd/manef-openclaw-runtime-sync.service)
+- timer:
+  [scripts/systemd/manef-openclaw-runtime-sync.timer](./scripts/systemd/manef-openclaw-runtime-sync.timer)
+
+Status parity saat ini:
+
+- `skills`: live mirror aktif
+- `channels`: live config/binding mirror aktif
+- `gatewayLogs`: live journal snapshot aktif
+- `nodes`, `config`, `crons`: belum full runtime mirror
+
 ## Local development
 
 1. Run `npm install` in this repo.

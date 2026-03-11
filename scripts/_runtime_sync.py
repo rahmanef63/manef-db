@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""Helpers for mirroring OpenClaw runtime snapshots into project Convex."""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+from pathlib import Path
+from typing import Any
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+STATE_DIR = Path(os.path.expanduser("~/.local/state/manef-db/openclaw-runtime-sync"))
+OPENCLAW_CONFIG_PATH = Path(os.path.expanduser("~/.openclaw/openclaw.json"))
+OPENCLAW_BIN = os.environ.get("OPENCLAW_BIN", os.path.expanduser("~/.local/bin/openclaw"))
+TENANT_ID = os.environ.get("APP_TENANT_ID", "rahman-main")
+
+
+def ensure_state_dir() -> Path:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    return STATE_DIR
+
+
+def load_openclaw_config() -> dict[str, Any]:
+    with OPENCLAW_CONFIG_PATH.open("r", encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def run_convex(fn: str, args: dict[str, Any]) -> Any:
+    proc = subprocess.run(
+        ["npx", "convex", "run", fn, json.dumps(args)],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        env=os.environ.copy(),
+    )
+    if proc.returncode != 0:
+        raise RuntimeError((proc.stderr or proc.stdout).strip())
+
+    out = (proc.stdout or "").strip()
+    return json.loads(out) if out else None
+
+
+def redact_config(value: Any) -> Any:
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, nested in value.items():
+            lowered = key.lower()
+            if any(token in lowered for token in ("token", "secret", "password", "key")):
+                redacted[key] = "[REDACTED]"
+            else:
+                redacted[key] = redact_config(nested)
+        return redacted
+
+    if isinstance(value, list):
+        return [redact_config(item) for item in value]
+
+    return value
+
+
+def print_summary(name: str, payload: Any) -> None:
+    print(json.dumps({"sync": name, "result": payload}, ensure_ascii=False))

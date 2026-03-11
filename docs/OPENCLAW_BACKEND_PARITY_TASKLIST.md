@@ -114,11 +114,29 @@ Definition of done:
 
 ## Channels
 
-- [ ] Finalisasi schema `channels` sebagai mirror state channel runtime.
-- [ ] Tambahkan metadata account:
+- [x] Finalisasi schema `channels` sebagai mirror state channel runtime.
+  Bukti:
+  - bulk mutation `syncRuntimeChannels`
+  - [api.ts](/home/rahman/projects/manef-db/convex/features/channels/api.ts)
+  - [sync_openclaw_channels_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_channels_to_convex.py)
+  - commit current working set 2026-03-11
+- [x] Tambahkan metadata account:
   `channelId`, `type`, `label`, `configured`, `running`, `linked`,
   `connected`, `mode`, `lastStartAt`, `lastConnectAt`, `lastError`.
-- [ ] Tambahkan sync nyata dari Gateway/OpenClaw runtime.
+  Bukti:
+  - arg/patch `upsertChannel` diperluas
+  - `syncRuntimeChannels` menulis metadata status + config mirror
+  - [api.ts](/home/rahman/projects/manef-db/convex/features/channels/api.ts)
+- [x] Tambahkan sync nyata dari Gateway/OpenClaw runtime.
+  Bukti:
+  - source runtime: `~/.openclaw/openclaw.json`
+  - sync script:
+    [sync_openclaw_channels_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_channels_to_convex.py)
+  - scheduler:
+    [manef-openclaw-runtime-sync.service](/home/rahman/projects/manef-db/scripts/systemd/manef-openclaw-runtime-sync.service)
+    dan
+    [manef-openclaw-runtime-sync.timer](/home/rahman/projects/manef-db/scripts/systemd/manef-openclaw-runtime-sync.timer)
+  - hasil sync awal: `upserted=2`, `allowListEntries=18`
 - [ ] Upsert channel manual harus tetap konsisten dengan hasil runtime sync.
 
 Definition of done:
@@ -152,8 +170,19 @@ Definition of done:
 
 ## Logs
 
-- [ ] Finalisasi `gatewayLogs` sebagai snapshot log runtime.
-- [ ] Tambahkan fetch nyata dari runtime log source.
+- [x] Finalisasi `gatewayLogs` sebagai snapshot log runtime.
+  Bukti:
+  - schema menambah `runtimeKey` + index `by_runtimeKey`
+  - bulk mutation `syncRuntimeLogs`
+  - [schema.ts](/home/rahman/projects/manef-db/convex/features/logs/schema.ts)
+  - [api.ts](/home/rahman/projects/manef-db/convex/features/logs/api.ts)
+- [x] Tambahkan fetch nyata dari runtime log source.
+  Bukti:
+  - source runtime: `journalctl --user-unit openclaw-gateway -o json`
+  - sync script:
+    [sync_openclaw_logs_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_logs_to_convex.py)
+  - timer service aktif menjalankan sync berkala
+  - hasil sync awal: `upserted=200`
 - [ ] Tambahkan filter source/level/time di backend agar frontend tidak perlu
   memfilter besar-besaran.
 - [ ] Tentukan retention policy dan cleanup policy.
@@ -166,10 +195,24 @@ Definition of done:
 
 ## Skills
 
-- [ ] Finalisasi `skills` sebagai mirror registry skill runtime.
-- [ ] Simpan metadata:
+- [x] Finalisasi `skills` sebagai mirror registry skill runtime.
+  Bukti:
+  - bulk mutation `syncRuntimeSkills`
+  - sync script:
+    [sync_openclaw_skills_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_skills_to_convex.py)
+  - hasil sync awal: `upserted=60`
+  - [api.ts](/home/rahman/projects/manef-db/convex/features/skills/api.ts)
+- [x] Simpan metadata:
   `name`, `source`, `enabled`, `version`, `config`, `updatedAt`.
-- [ ] Tambahkan refresh nyata dari runtime.
+  Bukti:
+  - `syncRuntimeSkills` menulis metadata runtime ke tabel `skills`
+  - field `config` menyimpan snapshot runtime terpilih
+- [x] Tambahkan refresh nyata dari runtime.
+  Bukti:
+  - source runtime: `openclaw skills list --json`
+  - sync script:
+    [sync_openclaw_skills_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_skills_to_convex.py)
+  - timer service aktif menjalankan sync berkala
 - [ ] Tambahkan toggle enable/disable yang konsisten dengan runtime.
 
 Definition of done:
@@ -219,11 +262,22 @@ Definition of done:
 
 ## Sync and mirror jobs
 
-- [ ] Buat daftar resmi semua sync entrypoints:
+- [x] Buat daftar resmi semua sync entrypoints:
   agents, sessions, channels, nodes, logs, skills, config, crons.
+  Bukti:
+  - wrapper:
+    [sync_openclaw_runtime_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_runtime_to_convex.py)
+  - entrypoint per runtime:
+    [sync_openclaw_skills_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_skills_to_convex.py),
+    [sync_openclaw_channels_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_channels_to_convex.py),
+    [sync_openclaw_logs_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_logs_to_convex.py)
 - [ ] Tentukan mana yang pull-based, mana yang webhook-based, mana yang n8n-based.
-- [ ] Semua sync job harus punya output status:
+- [x] Semua sync job harus punya output status:
   `inserted`, `updated`, `unchanged`, `failed`, `stale`.
+  Bukti:
+  - current scripts output JSON summary per sync job
+  - contoh hasil nyata:
+    `skills upserted=60`, `channels upserted=2 allowListEntries=18`, `logs upserted=200`
 - [ ] Simpan sync audit di tabel khusus bila perlu.
 
 Definition of done:

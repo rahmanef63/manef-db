@@ -1,0 +1,13 @@
+[Unit]
+Description=Sync OpenClaw runtime snapshots into manef-db Convex
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/rahman/projects/manef-db
+Environment=PATH=/home/rahman/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=OPENCLAW_BIN=/home/rahman/.local/bin/openclaw
+Environment=CONVEX_DEPLOYMENT=peaceful-dove-887
+Environment=CONVEX_DEPLOY_KEY=prod:peaceful-dove-887|eyJ2MiI6IjljZTRkNGM5OTQ5NzQ0YWI4NzAzOTU3Y2VjYjVhZWNmIn0=
+Environment=NODE_TLS_REJECT_UNAUTHORIZED=0
+ExecStart=/usr/bin/python3 /home/rahman/projects/manef-db/scripts/sync_openclaw_runtime_to_convex.py

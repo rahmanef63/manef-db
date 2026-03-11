@@ -1,0 +1,11 @@
+[Unit]
+Description=Run manef-db OpenClaw runtime sync every minute
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=60s
+AccuracySec=10s
+Unit=manef-openclaw-runtime-sync.service
+
+[Install]
+WantedBy=timers.target
