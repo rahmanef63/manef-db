@@ -12,6 +12,36 @@ Convex backend repo for Manef.
 - Exports `@manef/db/api` for typed function references in `manef-ui`.
 - Exports `@manef/db/dataModel` for shared Convex types like `Id`.
 
+## OpenClaw workspace model
+
+Repo ini sekarang punya dua lapisan model workspace yang perlu dibedakan:
+
+- `workspaces` + `members` + `messages`
+  Dipakai oleh layer legacy/ent untuk auth workspace, invites, members, dan
+  message board sederhana.
+- `userProfiles` + `workspaceTrees` + `agents` + `agentDelegations`
+  Dipakai oleh dashboard OpenClaw untuk contact workspace, agent workspace, dan
+  sub-agent hierarchy.
+
+Query utama untuk header navigator OpenClaw ada di:
+
+- [convex/openclawNavigator.ts](./convex/openclawNavigator.ts)
+
+Contract-nya:
+
+- admin melihat seluruh root workspace milik semua `userProfiles`
+- non-admin hanya melihat scope miliknya sendiri
+- setiap root mengembalikan seluruh child/sub-workspace agent di bawahnya
+- setiap node mengembalikan `agentIds` turunan agar frontend bisa memfilter
+  halaman seperti `Agents`, `Sessions`, dan `Usage`
+
+Penting:
+
+- perubahan file di bawah `convex/` tidak otomatis hidup hanya dengan redeploy
+  container Dokploy
+- setelah mengubah schema/query/mutation/action, jalankan `npm run deploy:ci`
+  untuk publish functions ke Convex deployment aktif
+
 ## Local development
 
 1. Run `npm install` in this repo.
