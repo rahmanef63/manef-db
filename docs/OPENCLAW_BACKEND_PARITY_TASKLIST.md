@@ -246,12 +246,34 @@ Definition of done:
 
 ## Remaining phases
 
-- [ ] Phase berikutnya: tambah policy unik apakah satu channel boleh multi-workspace
+- [x] Phase: tambah policy unik apakah satu channel boleh multi-workspace
   atau single primary workspace.
-- [ ] Phase berikutnya: write-through lokal dari binding manual ke runtime OpenClaw.
+  Bukti:
+  - tabel:
+    `channelBindingPolicies` di
+    [channels/schema.ts](/home/rahman/projects/manef-db/convex/features/channels/schema.ts)
+  - mutation/query:
+    `setChannelBindingPolicy`, `listChannelBindingPolicies` di
+    [channels/api.ts](/home/rahman/projects/manef-db/convex/features/channels/api.ts)
+- [x] Phase: write-through lokal dari binding manual ke runtime OpenClaw.
+  Bukti:
+  - mutation binding manual sekarang enqueue `syncOutbox`
+  - worker lokal:
+    [process_openclaw_outbox.py](/home/rahman/projects/manef-db/scripts/process_openclaw_outbox.py)
+  - worker menulis ke namespace aman:
+    `manef.dashboard.*` di `~/.openclaw/openclaw.json`
+  - runtime sync wrapper sekarang menjalankan worker outbox sebelum pull sync:
+    [sync_openclaw_runtime_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_runtime_to_convex.py)
 - [ ] Phase berikutnya: schema/backend untuk `Feature Store`.
 - [ ] Phase berikutnya: schema/backend untuk `Agent Builder` output
   `json_blocks` dan `custom_code`.
+
+Definition of done:
+
+- write manual dari dashboard membuat outbox event
+- worker lokal memproses outbox ke file lokal
+- sync berikutnya membaca ulang file lokal dan memantulkan state yang sama ke Convex
+- policy channel terbaca lagi dari file lokal ke DB
 
 ## Auth onboarding and access model
 

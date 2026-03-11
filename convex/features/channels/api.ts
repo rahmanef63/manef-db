@@ -72,6 +72,58 @@ async function resolveWorkspaceId(
     return null;
 }
 
+async function enqueueOutbox(
+    ctx: { db: { insert: (...args: any[]) => Promise<any> } },
+    args: {
+        entityKey: string;
+        entityType: string;
+        operation: string;
+        payload?: unknown;
+        source?: string;
+        tenantId?: string;
+    },
+) {
+    const now = Date.now();
+    const eventId = `${args.entityType}:${args.entityKey}:${args.operation}:${now}`;
+    return await ctx.db.insert("syncOutbox", {
+        attemptCount: 0,
+        createdAt: now,
+        entityKey: args.entityKey,
+        entityType: args.entityType,
+        eventId,
+        lastError: undefined,
+        operation: args.operation,
+        payload: args.payload,
+        processedAt: undefined,
+        source: args.source ?? "dashboard",
+        status: "pending",
+        tenantId: args.tenantId,
+        updatedAt: now,
+    });
+}
+
+async function resolvePrimaryAgentForWorkspace(
+    ctx: any,
+    workspaceId: string,
+) {
+    const workspace = await ctx.db.get(workspaceId);
+    if (!workspace) {
+        return null;
+    }
+    const links = await ctx.db
+        .query("workspaceAgents")
+        .withIndex("by_workspace", (q: any) => q.eq("workspaceId", workspaceId))
+        .collect();
+    const primary =
+        links.find((link: any) => link.isPrimary) ??
+        links.find((link: any) => link.relation === "primary") ??
+        links[0];
+    return {
+        agentId: primary?.agentId ?? workspace.agentId,
+        workspace,
+    };
+}
+
 /**
  * List all configured channels.
  */
@@ -96,6 +148,13 @@ export const listChannels = query({
             authAgeMs: v.optional(v.number()),
             lastError: v.optional(v.string()),
             config: v.optional(v.any()),
+            bindingPolicy: v.optional(
+                v.object({
+                    mode: v.string(),
+                    primaryWorkspaceId: v.optional(v.id("workspaceTrees")),
+                    source: v.optional(v.string()),
+                }),
+            ),
             workspaceBindings: v.array(
                 v.object({
                     access: v.optional(v.string()),
@@ -173,6 +232,10 @@ export const listChannels = query({
                     }),
                 )
             ).flat();
+            const policy = await ctx.db
+                .query("channelBindingPolicies")
+                .withIndex("by_channel", (q) => q.eq("channelId", c.channelId))
+                .first();
 
             return {
             _id: c._id,
@@ -192,6 +255,13 @@ export const listChannels = query({
             authAgeMs: c.authAgeMs,
             lastError: c.lastError,
             config: c.config,
+            bindingPolicy: policy
+                ? {
+                    mode: policy.mode,
+                    primaryWorkspaceId: policy.primaryWorkspaceId,
+                    source: policy.source,
+                }
+                : undefined,
             workspaceBindings,
             identityBindings,
         };
@@ -342,9 +412,21 @@ export const syncRuntimeChannels = mutation({
                 }),
             ),
         ),
+        channelPolicies: v.optional(
+            v.array(
+                v.object({
+                    channelId: v.string(),
+                    mode: v.union(v.literal("single-primary"), v.literal("multi-workspace")),
+                    primaryWorkspaceId: v.optional(v.id("workspaceTrees")),
+                    source: v.optional(v.string()),
+                    tenantId: v.optional(v.string()),
+                }),
+            ),
+        ),
     },
     returns: v.object({
         allowListEntries: v.number(),
+        channelPoliciesUpserted: v.number(),
         identityBindingsUpserted: v.number(),
         upserted: v.number(),
         workspaceBindingsUpserted: v.number(),
@@ -355,8 +437,10 @@ export const syncRuntimeChannels = mutation({
         let allowListEntries = 0;
         let workspaceBindingsUpserted = 0;
         let identityBindingsUpserted = 0;
+        let channelPoliciesUpserted = 0;
         const seenWorkspaceBindingKeys = new Set<string>();
         const seenIdentityBindingKeys = new Set<string>();
+        const seenPolicyChannels = new Set<string>();
 
         for (const channel of args.channels) {
             const {
@@ -521,9 +605,45 @@ export const syncRuntimeChannels = mutation({
             }
         }
 
+        for (const policy of args.channelPolicies ?? []) {
+            seenPolicyChannels.add(policy.channelId);
+            const existing = await ctx.db
+                .query("channelBindingPolicies")
+                .withIndex("by_channel", (q) => q.eq("channelId", policy.channelId))
+                .first();
+            const payload = {
+                channelId: policy.channelId,
+                mode: policy.mode,
+                primaryWorkspaceId: policy.primaryWorkspaceId,
+                source: policy.source ?? "openclaw-runtime",
+                tenantId: policy.tenantId,
+                updatedAt: now,
+            };
+            if (existing) {
+                await ctx.db.patch(existing._id, payload);
+            } else {
+                await ctx.db.insert("channelBindingPolicies", {
+                    ...payload,
+                    createdAt: now,
+                });
+            }
+            channelPoliciesUpserted++;
+        }
+
+        const existingPolicies = await ctx.db.query("channelBindingPolicies").collect();
+        for (const policy of existingPolicies) {
+            if (policy.source !== "openclaw-runtime") {
+                continue;
+            }
+            if (!seenPolicyChannels.has(policy.channelId)) {
+                await ctx.db.delete(policy._id);
+            }
+        }
+
         return {
             upserted,
             allowListEntries,
+            channelPoliciesUpserted,
             workspaceBindingsUpserted,
             identityBindingsUpserted,
         };
@@ -612,6 +732,27 @@ export const listIdentityWorkspaceBindings = query({
     },
 });
 
+export const listChannelBindingPolicies = query({
+    args: {},
+    returns: v.array(
+        v.object({
+            channelId: v.string(),
+            mode: v.string(),
+            primaryWorkspaceId: v.optional(v.id("workspaceTrees")),
+            source: v.optional(v.string()),
+        }),
+    ),
+    handler: async (ctx) => {
+        const rows = await ctx.db.query("channelBindingPolicies").collect();
+        return rows.map((row) => ({
+            channelId: row.channelId,
+            mode: row.mode,
+            primaryWorkspaceId: row.primaryWorkspaceId,
+            source: row.source,
+        }));
+    },
+});
+
 export const attachWorkspaceChannel = mutation({
     args: {
         access: v.optional(v.string()),
@@ -624,6 +765,9 @@ export const attachWorkspaceChannel = mutation({
     returns: v.id("workspaceChannelBindings"),
     handler: async (ctx, args) => {
         const now = Date.now();
+        const workspaceResolution = await resolvePrimaryAgentForWorkspace(ctx, args.workspaceId);
+        const agentId = args.agentId ?? workspaceResolution?.agentId;
+        const workspaceName = workspaceResolution?.workspace?.name;
         const existing = await ctx.db
             .query("workspaceChannelBindings")
             .withIndex("by_channel_workspace", (q) =>
@@ -632,7 +776,7 @@ export const attachWorkspaceChannel = mutation({
             .first();
         const payload = {
             access: args.access ?? "manual",
-            agentId: args.agentId,
+            agentId,
             channelId: args.channelId,
             source: args.source ?? "manual",
             tenantId: args.tenantId,
@@ -641,12 +785,43 @@ export const attachWorkspaceChannel = mutation({
         };
         if (existing) {
             await ctx.db.patch(existing._id, payload);
+            await enqueueOutbox(ctx, {
+                entityKey: `${args.channelId}:${args.workspaceId}`,
+                entityType: "channel_binding",
+                operation: "upsert",
+                payload: {
+                    access: payload.access,
+                    agentId,
+                    channelId: args.channelId,
+                    source: payload.source,
+                    tenantId: args.tenantId,
+                    workspaceId: args.workspaceId,
+                    workspaceName,
+                },
+                tenantId: args.tenantId,
+            });
             return existing._id;
         }
-        return await ctx.db.insert("workspaceChannelBindings", {
+        const id = await ctx.db.insert("workspaceChannelBindings", {
             ...payload,
             createdAt: now,
         });
+        await enqueueOutbox(ctx, {
+            entityKey: `${args.channelId}:${args.workspaceId}`,
+            entityType: "channel_binding",
+            operation: "upsert",
+            payload: {
+                access: payload.access,
+                agentId,
+                channelId: args.channelId,
+                source: payload.source,
+                tenantId: args.tenantId,
+                workspaceId: args.workspaceId,
+                workspaceName,
+            },
+            tenantId: args.tenantId,
+        });
+        return id;
     },
 });
 
@@ -665,6 +840,16 @@ export const detachWorkspaceChannel = mutation({
             .first();
         if (existing) {
             await ctx.db.delete(existing._id);
+            await enqueueOutbox(ctx, {
+                entityKey: `${args.channelId}:${args.workspaceId}`,
+                entityType: "channel_binding",
+                operation: "delete",
+                payload: {
+                    channelId: args.channelId,
+                    workspaceId: args.workspaceId,
+                },
+                tenantId: existing.tenantId,
+            });
         }
         return null;
     },
@@ -685,6 +870,9 @@ export const attachIdentityWorkspace = mutation({
         const now = Date.now();
         const normalizedPhone = normalizeRuntimePhone(args.externalUserId);
         let userId = undefined;
+        const workspaceResolution = await resolvePrimaryAgentForWorkspace(ctx, args.workspaceId);
+        const agentId = args.agentId ?? workspaceResolution?.agentId;
+        const workspaceName = workspaceResolution?.workspace?.name;
 
         const existingProfile = normalizedPhone
             ? await ctx.db
@@ -714,7 +902,7 @@ export const attachIdentityWorkspace = mutation({
             .first();
         const payload = {
             access: args.access ?? "manual",
-            agentId: args.agentId,
+            agentId,
             channel: args.channel,
             externalUserId: args.externalUserId,
             normalizedPhone,
@@ -726,12 +914,47 @@ export const attachIdentityWorkspace = mutation({
         };
         if (existing) {
             await ctx.db.patch(existing._id, payload);
+            await enqueueOutbox(ctx, {
+                entityKey: `${args.workspaceId}:${args.channel}:${args.externalUserId}`,
+                entityType: "identity_binding",
+                operation: "upsert",
+                payload: {
+                    access: payload.access,
+                    agentId,
+                    channel: args.channel,
+                    externalUserId: args.externalUserId,
+                    normalizedPhone,
+                    source: payload.source,
+                    tenantId: args.tenantId,
+                    workspaceId: args.workspaceId,
+                    workspaceName,
+                },
+                tenantId: args.tenantId,
+            });
             return existing._id;
         }
-        return await ctx.db.insert("identityWorkspaceBindings", {
+        const id = await ctx.db.insert("identityWorkspaceBindings", {
             ...payload,
             createdAt: now,
         });
+        await enqueueOutbox(ctx, {
+            entityKey: `${args.workspaceId}:${args.channel}:${args.externalUserId}`,
+            entityType: "identity_binding",
+            operation: "upsert",
+            payload: {
+                access: payload.access,
+                agentId,
+                channel: args.channel,
+                externalUserId: args.externalUserId,
+                normalizedPhone,
+                source: payload.source,
+                tenantId: args.tenantId,
+                workspaceId: args.workspaceId,
+                workspaceName,
+            },
+            tenantId: args.tenantId,
+        });
+        return id;
     },
 });
 
@@ -753,8 +976,66 @@ export const detachIdentityWorkspace = mutation({
             .first();
         if (existing) {
             await ctx.db.delete(existing._id);
+            await enqueueOutbox(ctx, {
+                entityKey: `${args.workspaceId}:${args.channel}:${args.externalUserId}`,
+                entityType: "identity_binding",
+                operation: "delete",
+                payload: {
+                    channel: args.channel,
+                    externalUserId: args.externalUserId,
+                    workspaceId: args.workspaceId,
+                },
+                tenantId: existing.tenantId,
+            });
         }
         return null;
+    },
+});
+
+export const setChannelBindingPolicy = mutation({
+    args: {
+        channelId: v.string(),
+        mode: v.union(v.literal("single-primary"), v.literal("multi-workspace")),
+        primaryWorkspaceId: v.optional(v.id("workspaceTrees")),
+        tenantId: v.optional(v.string()),
+    },
+    returns: v.id("channelBindingPolicies"),
+    handler: async (ctx, args) => {
+        const now = Date.now();
+        const existing = await ctx.db
+            .query("channelBindingPolicies")
+            .withIndex("by_channel", (q) => q.eq("channelId", args.channelId))
+            .first();
+        const payload = {
+            channelId: args.channelId,
+            mode: args.mode,
+            primaryWorkspaceId: args.primaryWorkspaceId,
+            source: "manual",
+            tenantId: args.tenantId,
+            updatedAt: now,
+        };
+        let id;
+        if (existing) {
+            await ctx.db.patch(existing._id, payload);
+            id = existing._id;
+        } else {
+            id = await ctx.db.insert("channelBindingPolicies", {
+                ...payload,
+                createdAt: now,
+            });
+        }
+        await enqueueOutbox(ctx, {
+            entityKey: args.channelId,
+            entityType: "channel_binding_policy",
+            operation: "upsert",
+            payload: {
+                channelId: args.channelId,
+                mode: args.mode,
+                primaryWorkspaceId: args.primaryWorkspaceId,
+            },
+            tenantId: args.tenantId,
+        });
+        return id;
     },
 });
 

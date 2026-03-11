@@ -69,4 +69,16 @@ export const channelsSchema = {
         .index("by_workspace", ["workspaceId"])
         .index("by_workspace_channel_external", ["workspaceId", "channel", "externalUserId"])
         .index("by_tenant", ["tenantId"]),
+
+    channelBindingPolicies: defineTable({
+        channelId: v.string(),
+        createdAt: v.float64(),
+        mode: v.string(),
+        primaryWorkspaceId: v.optional(v.id("workspaceTrees")),
+        source: v.optional(v.string()),
+        tenantId: v.optional(v.string()),
+        updatedAt: v.float64(),
+    })
+        .index("by_channel", ["channelId"])
+        .index("by_tenant", ["tenantId"]),
 };

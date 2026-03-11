@@ -158,7 +158,18 @@ Admin write surface yang sudah siap:
   - `detachWorkspaceChannel`
   - `attachIdentityWorkspace`
   - `detachIdentityWorkspace`
+- policy mutation:
+  - `setChannelBindingPolicy`
 - `manef-ui` sekarang sudah punya panel admin untuk memakai mutation tersebut
+
+Write-through lokal terbaru:
+
+- outbox event untuk binding manual sekarang diproses oleh
+  [process_openclaw_outbox.py](/home/rahman/projects/manef-db/scripts/process_openclaw_outbox.py)
+- worker ini menulis ke namespace aman `manef.dashboard.*` di file
+  `~/.openclaw/openclaw.json`
+- sync runtime berikutnya membaca namespace itu kembali dan memirror hasilnya ke
+  Convex
 
 ## Future product context
 

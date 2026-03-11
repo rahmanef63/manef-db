@@ -28,6 +28,10 @@ def main() -> int:
     cfg = load_openclaw_config()
     channels = cfg.get("channels", {}) or {}
     bindings = cfg.get("bindings", []) or []
+    manual_cfg = (((cfg.get("manef") or {}).get("dashboard") or {}))
+    manual_workspace_bindings = manual_cfg.get("workspaceChannelBindings", []) or []
+    manual_identity_bindings = manual_cfg.get("identityWorkspaceBindings", []) or []
+    manual_policies = manual_cfg.get("channelBindingPolicies", []) or []
 
     binding_counts: dict[str, int] = defaultdict(int)
     workspace_bindings = []
@@ -63,6 +67,40 @@ def main() -> int:
                 }
             )
 
+    for binding in manual_workspace_bindings:
+        channel_id = str(binding.get("channelId") or "").strip()
+        workspace_id = binding.get("workspaceId")
+        if not channel_id or not workspace_id:
+            continue
+        workspace_bindings.append(
+            {
+                "access": binding.get("access") or "manual",
+                "agentId": binding.get("agentId"),
+                "channelId": channel_id,
+                "source": binding.get("source") or "manual-file",
+                "tenantId": TENANT_ID,
+                "workspaceId": workspace_id,
+            }
+        )
+
+    for binding in manual_identity_bindings:
+        channel = str(binding.get("channel") or "").strip()
+        external_user_id = str(binding.get("externalUserId") or "").strip()
+        workspace_id = binding.get("workspaceId")
+        if not channel or not external_user_id or not workspace_id:
+            continue
+        identity_bindings.append(
+            {
+                "access": binding.get("access") or "manual",
+                "agentId": binding.get("agentId"),
+                "channel": channel,
+                "externalUserId": external_user_id,
+                "source": binding.get("source") or "manual-file",
+                "tenantId": TENANT_ID,
+                "workspaceId": workspace_id,
+            }
+        )
+
     payload = []
     for channel_id, config in channels.items():
         allow_list = [str(item) for item in as_list(config.get("allowFrom")) if str(item).strip()]
@@ -95,6 +133,17 @@ def main() -> int:
         "features/channels/api:syncRuntimeChannels",
         {
             "channels": payload,
+            "channelPolicies": [
+                {
+                    "channelId": str(policy.get("channelId") or "").strip(),
+                    "mode": policy.get("mode") or "multi-workspace",
+                    "primaryWorkspaceId": policy.get("primaryWorkspaceId"),
+                    "source": policy.get("source") or "manual-file",
+                    "tenantId": TENANT_ID,
+                }
+                for policy in manual_policies
+                if str(policy.get("channelId") or "").strip()
+            ],
             "identityBindings": identity_bindings,
             "workspaceBindings": workspace_bindings,
         },
