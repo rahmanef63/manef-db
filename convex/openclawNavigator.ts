@@ -22,9 +22,21 @@ function uniqueAgentIds(agentIds: string[]) {
   return Array.from(new Set(agentIds.filter(Boolean)));
 }
 
+function scopeSlugForTree(tree: {
+  _id: string;
+  agentId?: string | null;
+  name: string;
+}) {
+  if (tree.agentId?.trim()) {
+    return slugify(tree.agentId) || tree.agentId;
+  }
+  return buildScopeSlug([tree.name, tree._id]);
+}
+
 export const listScopes = query({
   args: {},
   returns: v.object({
+    defaultScopeSlug: v.optional(v.string()),
     isAdmin: v.boolean(),
     roots: v.array(
       v.object({
@@ -68,6 +80,7 @@ export const listScopes = query({
         isAdmin: false,
         roots: [],
         viewerEmail: undefined,
+        defaultScopeSlug: undefined,
       };
     }
 
@@ -95,6 +108,7 @@ export const listScopes = query({
         isAdmin,
         roots: [],
         viewerEmail,
+        defaultScopeSlug: undefined,
       };
     }
 
@@ -248,11 +262,7 @@ export const listScopes = query({
               ownerName: childProfile?.name ?? child.name,
               ownerPhone: childProfile?.phone,
               rootPath: child.rootPath,
-              slug: buildScopeSlug([
-                child.name,
-                child.agentId,
-                child._id,
-              ]),
+              slug: scopeSlugForTree(child),
               type: child.type,
             };
           });
@@ -272,17 +282,27 @@ export const listScopes = query({
             ownerName: effectiveProfile?.name ?? visibleRoot.name,
             ownerPhone: effectiveProfile?.phone,
             rootPath: visibleRoot.rootPath,
-            slug: buildScopeSlug([
-              visibleRoot.name,
-              visibleRoot.agentId,
-              visibleRoot._id,
-            ]),
+            slug: scopeSlugForTree(visibleRoot),
             type: visibleRoot.type,
           };
         });
       });
 
+    const mainRoot =
+      rawRoots.find((root) => root.agentId === "main" || root.slug === "main") ??
+      rawRoots.find((root) =>
+        root.children.some((child) => child.agentId === "main" || child.slug === "main"),
+      );
+    const defaultScopeSlug =
+      (mainRoot?.agentId === "main" || mainRoot?.slug === "main"
+        ? "main"
+        : mainRoot?.children.find(
+            (child) => child.agentId === "main" || child.slug === "main",
+          )?.slug) ??
+      rawRoots[0]?.slug;
+
     return {
+      defaultScopeSlug,
       isAdmin,
       roots: rawRoots,
       viewerEmail,
