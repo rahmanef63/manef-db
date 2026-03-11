@@ -20,6 +20,19 @@ Task belum selesai bila:
 - write berhasil ke Convex tetapi tidak pernah muncul di runtime OpenClaw
 - runtime berubah tetapi Convex tidak ikut berubah
 
+Session handoff references:
+
+- backend repo aktif:
+  [manef-db](/home/rahman/projects/manef-db)
+- frontend repo aktif:
+  [manef-ui](/home/rahman/projects/manef-ui)
+- repo acuan feature store:
+  [superspace](/home/rahman/projects/superspace)
+- backend menu store acuan:
+  [menuItems.ts](/home/rahman/projects/superspace/convex/features/menus/menuItems.ts)
+- frontend menu store acuan:
+  [MenuStorePage.tsx](/home/rahman/projects/superspace/frontend/features/menus/MenuStorePage.tsx)
+
 ## Global rules
 
 - [ ] Semua action `refresh*` atau `sync*` untuk feature OpenClaw harus nyata,
@@ -68,6 +81,47 @@ Definition of done:
 - ada schema/table/contract jelas untuk store items
 - item bisa dibaca per workspace dan per visibility scope
 - output builder bisa dipublish ke target eksternal tanpa mengubah model inti
+
+## Superspace findings
+
+Temuan yang sudah diverifikasi dari repo
+[superspace](/home/rahman/projects/superspace):
+
+- `workspace-store` di Superspace bukan feature installer; dia adalah manager
+  hierarchy workspace
+- `menu-store` adalah pola yang lebih dekat ke `Feature Store`:
+  catalog, preview, install, visibility, permission
+- SSOT feature di Superspace berasal dari `config.ts` per feature, lalu
+  digenerate menjadi:
+  - manifest default/system
+  - optional catalog
+
+Bukti file:
+
+- backend manifest:
+  [menu_manifest_data.ts](/home/rahman/projects/superspace/convex/features/menus/menu_manifest_data.ts)
+- backend optional catalog:
+  [optional_features_catalog.ts](/home/rahman/projects/superspace/convex/features/menus/optional_features_catalog.ts)
+- backend installer/manage:
+  [menuItems.ts](/home/rahman/projects/superspace/convex/features/menus/menuItems.ts)
+- frontend store UI:
+  [MenuStorePage.tsx](/home/rahman/projects/superspace/frontend/features/menus/MenuStorePage.tsx)
+- frontend workspace hierarchy:
+  [WorkspaceStorePage.tsx](/home/rahman/projects/superspace/frontend/features/workspace-store/WorkspaceStorePage.tsx)
+
+Implikasi untuk `manef-db`:
+
+- `Feature Store` backend harus menyediakan:
+  - catalog query
+  - preview metadata query
+  - install/uninstall per workspace
+  - scope metadata:
+    `workspace-local`, `workspace-shared`, `general/shared`
+- `Workspace Store` backend tetap dipisah dari `Feature Store`
+- `Agent Builder` harus ditambahkan sebagai item store khusus, bukan disamakan
+  dengan menu installer biasa
+- model backend `manef` tidak boleh meniru Superspace mentah-mentah; dia tetap
+  harus `workspace + agent + runtime OpenClaw aware`
 
 ## Navigator model
 
@@ -267,6 +321,18 @@ Definition of done:
 - [ ] Phase berikutnya: schema/backend untuk `Feature Store`.
 - [ ] Phase berikutnya: schema/backend untuk `Agent Builder` output
   `json_blocks` dan `custom_code`.
+
+Remaining breakdown untuk phase selanjutnya:
+
+- [ ] schema `featureStoreItems`
+- [ ] schema `workspaceFeatureInstalls`
+- [ ] schema `featureStorePreviews`
+- [ ] read API katalog item per workspace/scope
+- [ ] install/uninstall API per workspace
+- [ ] metadata publishing target untuk Superspace/external app
+- [ ] schema `agentBuilderDrafts`
+- [ ] mode draft:
+  `json_blocks` / `custom_code`
 
 Definition of done:
 

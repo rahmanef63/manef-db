@@ -8,6 +8,15 @@ Convex backend repo for Manef.
 - [Docs index](./docs/README.md)
 - [OpenClaw backend parity tasklist](./docs/OPENCLAW_BACKEND_PARITY_TASKLIST.md)
 
+Session handoff references:
+
+- backend tasklist:
+  [OPENCLAW_BACKEND_PARITY_TASKLIST.md](/home/rahman/projects/manef-db/docs/OPENCLAW_BACKEND_PARITY_TASKLIST.md)
+- frontend tasklist:
+  [OPENCLAW_FRONTEND_PARITY_TASKLIST.md](/home/rahman/projects/manef-ui/docs/OPENCLAW_FRONTEND_PARITY_TASKLIST.md)
+- Superspace repo clone:
+  [superspace](/home/rahman/projects/superspace)
+
 ## Responsibilities
 
 - Owns `convex/` schema, queries, mutations, actions, and generated API types.
@@ -189,6 +198,27 @@ Catatan:
 - model data `manef-db` harus tetap netral dan workspace-aware
 - integrasi Superspace sebaiknya dilakukan lewat adapter/publish contract, bukan
   dengan meniru struktur repo eksternal secara langsung
+
+Temuan Superspace yang sudah diverifikasi:
+
+- acuan `Feature Store` yang paling relevan adalah `menu-store`
+- acuan `Workspace Store` yang paling relevan adalah `workspace-store`
+- file referensi penting:
+  - [menuItems.ts](/home/rahman/projects/superspace/convex/features/menus/menuItems.ts)
+  - [menu_manifest_data.ts](/home/rahman/projects/superspace/convex/features/menus/menu_manifest_data.ts)
+  - [optional_features_catalog.ts](/home/rahman/projects/superspace/convex/features/menus/optional_features_catalog.ts)
+  - [MenuStorePage.tsx](/home/rahman/projects/superspace/frontend/features/menus/MenuStorePage.tsx)
+  - [WorkspaceStorePage.tsx](/home/rahman/projects/superspace/frontend/features/workspace-store/WorkspaceStorePage.tsx)
+
+Kesimpulan implementasi:
+
+- `Feature Store` `manef-db` nanti harus menyediakan catalog/install contract
+  per workspace
+- `Workspace Store` tetap dipisahkan dari `Feature Store`
+- `Agent Builder` menjadi item store khusus dengan dua mode:
+  `json_blocks` dan `custom_code`
+- semua itu tetap harus mengikuti boundary:
+  `workspace`, `sub-workspace`, `agents`, `channels`, dan mirror runtime OpenClaw
 
 Sessions volume note:
 
