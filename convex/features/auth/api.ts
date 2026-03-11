@@ -214,7 +214,8 @@ async function createAuditLog(
       | "REGISTRATION_REQUESTED"
       | "REGISTRATION_APPROVED"
       | "REGISTRATION_DENIED"
-      | "TEMP_PASSWORD_ISSUED";
+      | "TEMP_PASSWORD_ISSUED"
+      | "PASSWORD_CHANGED";
     meta?: Record<string, unknown>;
     userId?: unknown;
   }
@@ -716,13 +717,14 @@ export const authorizePasswordLogin = mutation({
   returns: v.object({
     code: loginCode,
     deviceId: v.optional(v.id("authDevices")),
-    policyVersion: v.optional(v.number()),
-    roles: v.optional(v.array(v.string())),
-    sessionId: v.optional(v.id("authSessions")),
-    sessionVersion: v.optional(v.number()),
-    userId: v.optional(v.id("authUsers")),
-    userEmail: v.optional(v.string()),
-    userName: v.optional(v.string()),
+      policyVersion: v.optional(v.number()),
+      roles: v.optional(v.array(v.string())),
+      sessionId: v.optional(v.id("authSessions")),
+      sessionVersion: v.optional(v.number()),
+      mustChangePassword: v.optional(v.boolean()),
+      userId: v.optional(v.id("authUsers")),
+      userEmail: v.optional(v.string()),
+      userName: v.optional(v.string()),
   }),
   handler: async (ctx, args) => {
     const admin = getAdminConfig();
@@ -1028,10 +1030,54 @@ export const authorizePasswordLogin = mutation({
       roles: authUser.roles,
       sessionId,
       sessionVersion: authUser.sessionVersion,
+      mustChangePassword: authUser.mustChangePassword,
       userEmail: authUser.email,
       userId: authUser._id,
       userName: authUser.name,
     };
+  },
+});
+
+export const changePassword = mutation({
+  args: {
+    currentPassword: v.string(),
+    newPassword: v.string(),
+    userId: v.id("authUsers"),
+  },
+  returns: v.literal("ok"),
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const currentHash = await hashPassword(args.currentPassword);
+    if (!user.passwordHash || user.passwordHash !== currentHash) {
+      throw new Error("Current password is invalid");
+    }
+
+    const nextPassword = args.newPassword.trim();
+    if (nextPassword.length < 6) {
+      throw new Error("New password must be at least 6 characters");
+    }
+
+    const nextHash = await hashPassword(nextPassword);
+    await ctx.db.patch(user._id, {
+      mustChangePassword: false,
+      passwordHash: nextHash,
+      temporaryPasswordIssuedAt: undefined,
+      updatedAt: Date.now(),
+    });
+
+    await createAuditLog(ctx, {
+      event: "PASSWORD_CHANGED",
+      meta: {
+        reason: user.mustChangePassword ? "FIRST_LOGIN" : "SELF_SERVICE",
+      },
+      userId: user._id,
+    });
+
+    return "ok" as const;
   },
 });
 

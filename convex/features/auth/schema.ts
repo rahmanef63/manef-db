@@ -32,7 +32,8 @@ const authAuditEvent = v.union(
   v.literal("REGISTRATION_REQUESTED"),
   v.literal("REGISTRATION_APPROVED"),
   v.literal("REGISTRATION_DENIED"),
-  v.literal("TEMP_PASSWORD_ISSUED")
+  v.literal("TEMP_PASSWORD_ISSUED"),
+  v.literal("PASSWORD_CHANGED")
 );
 
 export const authSchema = {
