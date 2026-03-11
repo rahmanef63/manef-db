@@ -129,10 +129,19 @@ Definition of done:
 
 ## Nodes and exec approvals
 
-- [ ] Finalisasi `nodes`, `execApprovals`, dan `nodeBindings`.
+- [x] Finalisasi `nodes`, `execApprovals`, dan `nodeBindings`.
+  Bukti:
+  - query baru `listNodeBindings`
+  - existing live APIs `listNodes`, `getExecApprovals`, `upsertExecApproval`
+  - [api.ts](/home/rahman/projects/manef-db/convex/features/nodes/api.ts)
+  - commit `a22c153`
 - [ ] Tambahkan sync nyata dari runtime node registry.
-- [ ] Tambahkan query join:
+- [x] Tambahkan query join:
   node + bound agents + exec approval summary.
+  Bukti:
+  - `listNodeBindings` join `nodeBindings` dengan `nodes`
+  - [api.ts](/home/rahman/projects/manef-db/convex/features/nodes/api.ts)
+  - commit `a22c153`
 - [ ] Pastikan approval changes bersifat read-after-write.
 
 Definition of done:
