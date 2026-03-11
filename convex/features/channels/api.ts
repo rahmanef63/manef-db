@@ -670,6 +670,94 @@ export const detachWorkspaceChannel = mutation({
     },
 });
 
+export const attachIdentityWorkspace = mutation({
+    args: {
+        access: v.optional(v.string()),
+        agentId: v.optional(v.string()),
+        channel: v.string(),
+        externalUserId: v.string(),
+        source: v.optional(v.string()),
+        tenantId: v.optional(v.string()),
+        workspaceId: v.id("workspaceTrees"),
+    },
+    returns: v.id("identityWorkspaceBindings"),
+    handler: async (ctx, args) => {
+        const now = Date.now();
+        const normalizedPhone = normalizeRuntimePhone(args.externalUserId);
+        let userId = undefined;
+
+        const existingProfile = normalizedPhone
+            ? await ctx.db
+                .query("userProfiles")
+                .withIndex("by_phone", (q) => q.eq("phone", normalizedPhone))
+                .first()
+            : null;
+        if (existingProfile) {
+            userId = existingProfile._id;
+        } else {
+            const existingIdentity = await ctx.db
+                .query("userIdentities")
+                .withIndex("by_channel_external", (q) =>
+                    q.eq("channel", args.channel).eq("externalUserId", args.externalUserId)
+                )
+                .first();
+            userId = existingIdentity?.userId;
+        }
+
+        const existing = await ctx.db
+            .query("identityWorkspaceBindings")
+            .withIndex("by_workspace_channel_external", (q) =>
+                q.eq("workspaceId", args.workspaceId)
+                    .eq("channel", args.channel)
+                    .eq("externalUserId", args.externalUserId)
+            )
+            .first();
+        const payload = {
+            access: args.access ?? "manual",
+            agentId: args.agentId,
+            channel: args.channel,
+            externalUserId: args.externalUserId,
+            normalizedPhone,
+            source: args.source ?? "manual",
+            tenantId: args.tenantId,
+            updatedAt: now,
+            userId,
+            workspaceId: args.workspaceId,
+        };
+        if (existing) {
+            await ctx.db.patch(existing._id, payload);
+            return existing._id;
+        }
+        return await ctx.db.insert("identityWorkspaceBindings", {
+            ...payload,
+            createdAt: now,
+        });
+    },
+});
+
+export const detachIdentityWorkspace = mutation({
+    args: {
+        channel: v.string(),
+        externalUserId: v.string(),
+        workspaceId: v.id("workspaceTrees"),
+    },
+    returns: v.null(),
+    handler: async (ctx, args) => {
+        const existing = await ctx.db
+            .query("identityWorkspaceBindings")
+            .withIndex("by_workspace_channel_external", (q) =>
+                q.eq("workspaceId", args.workspaceId)
+                    .eq("channel", args.channel)
+                    .eq("externalUserId", args.externalUserId)
+            )
+            .first();
+        if (existing) {
+            await ctx.db.delete(existing._id);
+        }
+        return null;
+    },
+});
+
 /**
  * Delete a channel.
  */

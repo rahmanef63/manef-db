@@ -151,6 +151,15 @@ Remaining phase terdekat:
 - schema/backend `Feature Store`
 - schema/backend `Agent Builder`
 
+Admin write surface yang sudah siap:
+
+- backend mutation:
+  - `attachWorkspaceChannel`
+  - `detachWorkspaceChannel`
+  - `attachIdentityWorkspace`
+  - `detachIdentityWorkspace`
+- `manef-ui` sekarang sudah punya panel admin untuk memakai mutation tersebut
+
 ## Future product context
 
 Repo ini juga perlu menyiapkan contract backend untuk roadmap berikut:

@@ -227,6 +227,8 @@ Definition of done:
   Bukti:
   - `attachWorkspaceChannel`
   - `detachWorkspaceChannel`
+  - `attachIdentityWorkspace`
+  - `detachIdentityWorkspace`
   - [channels/api.ts](/home/rahman/projects/manef-db/convex/features/channels/api.ts)
 - [ ] Tambahkan sync dari runtime OpenClaw bindings ke Convex.
 - [x] Tambahkan sync dari runtime OpenClaw bindings ke Convex.
@@ -247,7 +249,6 @@ Definition of done:
 - [ ] Phase berikutnya: tambah policy unik apakah satu channel boleh multi-workspace
   atau single primary workspace.
 - [ ] Phase berikutnya: write-through lokal dari binding manual ke runtime OpenClaw.
-- [ ] Phase berikutnya: menu/admin surface untuk manage binding dari `manef-ui`.
 - [ ] Phase berikutnya: schema/backend untuk `Feature Store`.
 - [ ] Phase berikutnya: schema/backend untuk `Agent Builder` output
   `json_blocks` dan `custom_code`.
