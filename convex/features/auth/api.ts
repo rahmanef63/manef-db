@@ -10,6 +10,13 @@ const loginCode = v.union(
   v.literal("EMAIL_DOMAIN_NOT_ALLOWED")
 );
 
+const registrationStatus = v.union(
+  v.literal("pending_workspace"),
+  v.literal("ready_for_access"),
+  v.literal("approved"),
+  v.literal("denied")
+);
+
 const deviceStatus = v.union(
   v.literal("approved"),
   v.literal("pending"),
@@ -78,6 +85,28 @@ function buildSyntheticEmailFromPhone(phone: string) {
   return `phone-${digits || "user"}@auth.local`;
 }
 
+function buildDisplayName(name: string, phone: string) {
+  const trimmed = name.trim();
+  if (trimmed) {
+    return trimmed;
+  }
+  const suffix = phone.replace(/[^\d]/g, "").slice(-4) || "user";
+  return `User ${suffix}`;
+}
+
+function buildWorkspaceName(name: string) {
+  const trimmed = name.trim();
+  return trimmed ? `${trimmed}'s Workspace` : "Workspace";
+}
+
+function buildWorkspaceRootPath(userId: string) {
+  return `/users/${userId}`;
+}
+
+function generateTemporaryPassword() {
+  return `${Math.floor(Math.random() * 1_000_000)}`.padStart(6, "0");
+}
+
 function getEmailDomain(email: string) {
   return normalizeEmail(email).split("@")[1] ?? "";
 }
@@ -141,7 +170,11 @@ async function createAuditLog(
       | "LOGIN_SUCCESS"
       | "LOGIN_DENIED"
       | "SESSION_REVOKED"
-      | "SESSIONS_REVOKED";
+      | "SESSIONS_REVOKED"
+      | "REGISTRATION_REQUESTED"
+      | "REGISTRATION_APPROVED"
+      | "REGISTRATION_DENIED"
+      | "TEMP_PASSWORD_ISSUED";
     meta?: Record<string, unknown>;
     userId?: unknown;
   }
@@ -152,6 +185,51 @@ async function createAuditLog(
     meta: args.meta,
     userId: args.userId,
   });
+}
+
+async function resolveProfileByPhone(ctx: any, phone: string) {
+  const normalizedPhone = normalizePhone(phone);
+  if (!normalizedPhone) {
+    return null;
+  }
+
+  const byPhone = await ctx.db
+    .query("userProfiles")
+    .withIndex("by_phone", (q: any) => q.eq("phone", normalizedPhone))
+    .first();
+  if (byPhone) {
+    return byPhone;
+  }
+
+  const channels = ["whatsapp", "phone"];
+  for (const channel of channels) {
+    const identity = await ctx.db
+      .query("userIdentities")
+      .withIndex("by_channel_external", (q: any) =>
+        q.eq("channel", channel).eq("externalUserId", normalizedPhone)
+      )
+      .first();
+    if (!identity) {
+      continue;
+    }
+    const profile = await ctx.db.get(identity.userId);
+    if (profile) {
+      return profile;
+    }
+  }
+
+  return null;
+}
+
+async function listOwnedWorkspaceIds(ctx: any, profileId: any) {
+  const workspaces = await ctx.db
+    .query("workspaceTrees")
+    .withIndex("by_owner", (q: any) => q.eq("ownerId", profileId))
+    .collect();
+
+  return workspaces
+    .sort((left: any, right: any) => left.name.localeCompare(right.name))
+    .map((workspace: any) => workspace._id);
 }
 
 export const getAuthProfile = query({
@@ -220,6 +298,364 @@ export const getAuthProfileByEmail = query({
       roles: authUser.roles,
       status: authUser.status,
     };
+  },
+});
+
+export const submitRegistrationRequest = mutation({
+  args: {
+    context: v.string(),
+    name: v.string(),
+    phone: v.string(),
+  },
+  returns: v.object({
+    hasWorkspace: v.boolean(),
+    matchedProfileId: v.optional(v.id("userProfiles")),
+    matchedWorkspaceCount: v.number(),
+    requestId: v.id("authRegistrationRequests"),
+    status: registrationStatus,
+  }),
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const phone = normalizePhone(args.phone);
+    if (!phone) {
+      throw new Error("Phone number is required");
+    }
+
+    const name = buildDisplayName(args.name, phone);
+    const context = args.context.trim();
+    if (!context) {
+      throw new Error("Registration context is required");
+    }
+
+    const matchedProfile = await resolveProfileByPhone(ctx, phone);
+    const matchedWorkspaceIds = matchedProfile
+      ? await listOwnedWorkspaceIds(ctx, matchedProfile._id)
+      : [];
+    const status =
+      matchedWorkspaceIds.length > 0
+        ? ("ready_for_access" as const)
+        : ("pending_workspace" as const);
+
+    const existingRequest = await ctx.db
+      .query("authRegistrationRequests")
+      .withIndex("by_phone", (q) => q.eq("phone", phone))
+      .first();
+
+    const payload = {
+      context,
+      matchedProfileId: matchedProfile?._id,
+      matchedWorkspaceIds,
+      name,
+      phone,
+      status,
+      updatedAt: now,
+    };
+
+    let requestId;
+    if (existingRequest && existingRequest.status !== "denied") {
+      await ctx.db.patch(existingRequest._id, {
+        ...payload,
+        approvedAt: undefined,
+        approvedBy: undefined,
+        deniedAt: undefined,
+        deniedBy: undefined,
+        reviewNote: undefined,
+        temporaryPasswordIssuedAt: undefined,
+      });
+      requestId = existingRequest._id;
+    } else {
+      requestId = await ctx.db.insert("authRegistrationRequests", {
+        ...payload,
+        approvedAt: undefined,
+        approvedBy: undefined,
+        authUserId: undefined,
+        createdAt: now,
+        deniedAt: undefined,
+        deniedBy: undefined,
+        reviewNote: undefined,
+        temporaryPasswordIssuedAt: undefined,
+      });
+    }
+
+    await createAuditLog(ctx, {
+      event: "REGISTRATION_REQUESTED",
+      meta: {
+        hasWorkspace: matchedWorkspaceIds.length > 0,
+        matchedProfileId: matchedProfile?._id,
+        matchedWorkspaceCount: matchedWorkspaceIds.length,
+        phone,
+        requestId,
+      },
+    });
+
+    return {
+      hasWorkspace: matchedWorkspaceIds.length > 0,
+      matchedProfileId: matchedProfile?._id,
+      matchedWorkspaceCount: matchedWorkspaceIds.length,
+      requestId,
+      status,
+    };
+  },
+});
+
+export const listRegistrationRequests = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      _id: v.id("authRegistrationRequests"),
+      approvedAt: v.optional(v.number()),
+      authUserId: v.optional(v.id("authUsers")),
+      context: v.string(),
+      createdAt: v.number(),
+      matchedProfileId: v.optional(v.id("userProfiles")),
+      matchedWorkspaceCount: v.number(),
+      matchedWorkspaceNames: v.array(v.string()),
+      name: v.string(),
+      phone: v.string(),
+      reviewNote: v.optional(v.string()),
+      status: registrationStatus,
+      temporaryPasswordIssuedAt: v.optional(v.number()),
+      updatedAt: v.number(),
+    })
+  ),
+  handler: async (ctx) => {
+    const requests = await ctx.db
+      .query("authRegistrationRequests")
+      .withIndex("by_status", (q) => q.eq("status", "pending_workspace"))
+      .collect();
+    const readyRequests = await ctx.db
+      .query("authRegistrationRequests")
+      .withIndex("by_status", (q) => q.eq("status", "ready_for_access"))
+      .collect();
+    const approvedRequests = await ctx.db
+      .query("authRegistrationRequests")
+      .withIndex("by_status", (q) => q.eq("status", "approved"))
+      .order("desc")
+      .take(50);
+    const deniedRequests = await ctx.db
+      .query("authRegistrationRequests")
+      .withIndex("by_status", (q) => q.eq("status", "denied"))
+      .order("desc")
+      .take(20);
+
+    const all = [...requests, ...readyRequests, ...approvedRequests, ...deniedRequests]
+      .sort((left, right) => right.updatedAt - left.updatedAt)
+      .slice(0, 100);
+
+    const result = [];
+    for (const request of all) {
+      const workspaceNames = [];
+      for (const workspaceId of request.matchedWorkspaceIds) {
+        const workspace = await ctx.db.get(workspaceId);
+        if (workspace) {
+          workspaceNames.push(workspace.name);
+        }
+      }
+
+      result.push({
+        _id: request._id,
+        approvedAt: request.approvedAt,
+        authUserId: request.authUserId,
+        context: request.context,
+        createdAt: request.createdAt,
+        matchedProfileId: request.matchedProfileId,
+        matchedWorkspaceCount: request.matchedWorkspaceIds.length,
+        matchedWorkspaceNames: workspaceNames,
+        name: request.name,
+        phone: request.phone,
+        reviewNote: request.reviewNote,
+        status: request.status,
+        temporaryPasswordIssuedAt: request.temporaryPasswordIssuedAt,
+        updatedAt: request.updatedAt,
+      });
+    }
+
+    return result;
+  },
+});
+
+export const approveRegistrationRequest = mutation({
+  args: {
+    createWorkspace: v.optional(v.boolean()),
+    requestId: v.id("authRegistrationRequests"),
+  },
+  returns: v.object({
+    authUserId: v.id("authUsers"),
+    createdWorkspaceId: v.optional(v.id("workspaceTrees")),
+    requestId: v.id("authRegistrationRequests"),
+    temporaryPassword: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const request = await ctx.db.get(args.requestId);
+    if (!request) {
+      throw new Error("Registration request not found");
+    }
+    if (request.status === "denied") {
+      throw new Error("Denied request cannot be approved");
+    }
+
+    let profile =
+      (request.matchedProfileId
+        ? await ctx.db.get(request.matchedProfileId)
+        : null) ?? (await resolveProfileByPhone(ctx, request.phone));
+
+    if (!profile && !args.createWorkspace) {
+      throw new Error("Workspace approval requires an existing profile");
+    }
+
+    if (!profile) {
+      const profileId = await ctx.db.insert("userProfiles", {
+        createdAt: now,
+        name: request.name,
+        nickname: request.name,
+        phone: request.phone,
+        updatedAt: now,
+      });
+      profile = await ctx.db.get(profileId);
+    }
+
+    if (!profile) {
+      throw new Error("Failed to create or load the user profile");
+    }
+
+    let matchedWorkspaceIds = await listOwnedWorkspaceIds(ctx, profile._id);
+    let createdWorkspaceId;
+    if (matchedWorkspaceIds.length === 0 && args.createWorkspace) {
+      createdWorkspaceId = await ctx.db.insert("workspaceTrees", {
+        createdAt: now,
+        description: "Workspace created from admin registration approval.",
+        fileCount: 0,
+        name: buildWorkspaceName(request.name),
+        ownerId: profile._id,
+        rootPath: buildWorkspaceRootPath(profile._id),
+        runtimePath: undefined,
+        source: "registration",
+        status: "active",
+        type: "user",
+        updatedAt: now,
+      });
+      matchedWorkspaceIds = [createdWorkspaceId];
+    }
+
+    const temporaryPassword = generateTemporaryPassword();
+    const temporaryPasswordHash = await hashPassword(temporaryPassword);
+    const syntheticEmail =
+      profile.email ?? buildSyntheticEmailFromPhone(request.phone);
+
+    const existingAuthUser =
+      (await ctx.db
+        .query("authUsers")
+        .withIndex("by_profile", (q) => q.eq("profileId", profile._id))
+        .first()) ??
+      (await ctx.db
+        .query("authUsers")
+        .withIndex("by_phone", (q) => q.eq("phone", request.phone))
+        .first()) ??
+      (await ctx.db
+        .query("authUsers")
+        .withIndex("by_email", (q) => q.eq("email", syntheticEmail))
+        .first());
+
+    let authUserId;
+    if (existingAuthUser) {
+      await ctx.db.patch(existingAuthUser._id, {
+        email: existingAuthUser.email || syntheticEmail,
+        mustChangePassword: true,
+        name: request.name || existingAuthUser.name,
+        passwordHash: temporaryPasswordHash,
+        phone: request.phone,
+        profileId: profile._id,
+        roles: existingAuthUser.roles.length > 0 ? existingAuthUser.roles : ["member"],
+        status: "active",
+        temporaryPasswordIssuedAt: now,
+        updatedAt: now,
+      });
+      authUserId = existingAuthUser._id;
+    } else {
+      authUserId = await ctx.db.insert("authUsers", {
+        createdAt: now,
+        email: syntheticEmail,
+        mustChangePassword: true,
+        name: request.name,
+        passwordHash: temporaryPasswordHash,
+        phone: request.phone,
+        profileId: profile._id,
+        roles: ["member"],
+        sessionVersion: 1,
+        status: "active",
+        temporaryPasswordIssuedAt: now,
+        updatedAt: now,
+      });
+    }
+
+    await ctx.db.patch(request._id, {
+      approvedAt: now,
+      approvedBy: "admin",
+      authUserId,
+      matchedProfileId: profile._id,
+      matchedWorkspaceIds,
+      status: "approved",
+      temporaryPasswordIssuedAt: now,
+      updatedAt: now,
+    });
+
+    await createAuditLog(ctx, {
+      event: "REGISTRATION_APPROVED",
+      meta: {
+        createdWorkspaceId,
+        phone: request.phone,
+        requestId: request._id,
+        workspaceCount: matchedWorkspaceIds.length,
+      },
+      userId: authUserId,
+    });
+    await createAuditLog(ctx, {
+      event: "TEMP_PASSWORD_ISSUED",
+      meta: {
+        phone: request.phone,
+        requestId: request._id,
+      },
+      userId: authUserId,
+    });
+
+    return {
+      authUserId,
+      createdWorkspaceId,
+      requestId: request._id,
+      temporaryPassword,
+    };
+  },
+});
+
+export const denyRegistrationRequest = mutation({
+  args: {
+    reason: v.optional(v.string()),
+    requestId: v.id("authRegistrationRequests"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const request = await ctx.db.get(args.requestId);
+    if (!request) {
+      throw new Error("Registration request not found");
+    }
+    await ctx.db.patch(request._id, {
+      deniedAt: Date.now(),
+      deniedBy: "admin",
+      reviewNote: args.reason?.trim() || undefined,
+      status: "denied",
+      updatedAt: Date.now(),
+    });
+    await createAuditLog(ctx, {
+      event: "REGISTRATION_DENIED",
+      meta: {
+        phone: request.phone,
+        reason: args.reason?.trim() || undefined,
+        requestId: request._id,
+      },
+      userId: request.authUserId,
+    });
+    return null;
   },
 });
 

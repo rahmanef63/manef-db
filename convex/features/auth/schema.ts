@@ -6,6 +6,13 @@ const authUserStatus = v.union(
   v.literal("blocked")
 );
 
+const authRegistrationStatus = v.union(
+  v.literal("pending_workspace"),
+  v.literal("ready_for_access"),
+  v.literal("approved"),
+  v.literal("denied")
+);
+
 const authDeviceStatus = v.union(
   v.literal("approved"),
   v.literal("pending"),
@@ -21,7 +28,11 @@ const authAuditEvent = v.union(
   v.literal("LOGIN_SUCCESS"),
   v.literal("LOGIN_DENIED"),
   v.literal("SESSION_REVOKED"),
-  v.literal("SESSIONS_REVOKED")
+  v.literal("SESSIONS_REVOKED"),
+  v.literal("REGISTRATION_REQUESTED"),
+  v.literal("REGISTRATION_APPROVED"),
+  v.literal("REGISTRATION_DENIED"),
+  v.literal("TEMP_PASSWORD_ISSUED")
 );
 
 export const authSchema = {
@@ -31,6 +42,8 @@ export const authSchema = {
     passwordHash: v.optional(v.string()),
     phone: v.optional(v.string()),
     profileId: v.optional(v.id("userProfiles")),
+    mustChangePassword: v.optional(v.boolean()),
+    temporaryPasswordIssuedAt: v.optional(v.float64()),
     roles: v.array(v.string()),
     sessionVersion: v.number(),
     status: authUserStatus,
@@ -103,6 +116,27 @@ export const authSchema = {
   })
     .index("by_nonce_hash", ["nonceHash"])
     .index("by_expires", ["expiresAt"]),
+
+  authRegistrationRequests: defineTable({
+    approvedAt: v.optional(v.float64()),
+    approvedBy: v.optional(v.string()),
+    authUserId: v.optional(v.id("authUsers")),
+    context: v.string(),
+    createdAt: v.float64(),
+    deniedAt: v.optional(v.float64()),
+    deniedBy: v.optional(v.string()),
+    matchedProfileId: v.optional(v.id("userProfiles")),
+    matchedWorkspaceIds: v.array(v.id("workspaceTrees")),
+    name: v.string(),
+    phone: v.string(),
+    reviewNote: v.optional(v.string()),
+    status: authRegistrationStatus,
+    temporaryPasswordIssuedAt: v.optional(v.float64()),
+    updatedAt: v.float64(),
+  })
+    .index("by_phone", ["phone"])
+    .index("by_profile", ["matchedProfileId"])
+    .index("by_status", ["status"]),
 
   authPolicies: defineTable({
     allowBootstrapAutoApprove: v.boolean(),
