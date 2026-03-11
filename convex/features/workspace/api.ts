@@ -1,6 +1,161 @@
 import { query, mutation, action } from "../../_generated/server";
 import { v } from "convex/values";
 
+function normalizeRuntimePhone(value: string | undefined) {
+    const trimmed = value?.trim() ?? "";
+    if (!trimmed) {
+        return "";
+    }
+    const digits = trimmed.replace(/[^\d]/g, "");
+    if (!digits) {
+        return "";
+    }
+    if (digits.startsWith("62")) {
+        return `+${digits}`;
+    }
+    if (digits.startsWith("0")) {
+        return `+62${digits.slice(1)}`;
+    }
+    if (digits.startsWith("8")) {
+        return `+62${digits}`;
+    }
+    return trimmed.startsWith("+") ? `+${digits}` : `+${digits}`;
+}
+
+function phoneLookupVariants(value: string | undefined) {
+    const normalized = normalizeRuntimePhone(value);
+    const digits = normalized.replace(/[^\d]/g, "");
+    const variants = new Set<string>();
+    if (!digits) {
+        return [];
+    }
+    variants.add(digits);
+    variants.add(`+${digits}`);
+    variants.add(`${digits}@s.whatsapp.net`);
+    variants.add(`${digits}@lid`);
+    variants.add(`0${digits.startsWith("62") ? digits.slice(2) : digits}`);
+    return Array.from(variants).filter(Boolean);
+}
+
+async function resolveOrCreateOwnerProfile(
+    ctx: any,
+    args: {
+        ownerChannel?: string;
+        ownerExternalId?: string;
+        ownerName?: string;
+        ownerPhone?: string;
+    },
+    now: number,
+) {
+    const phoneVariants = phoneLookupVariants(args.ownerPhone ?? args.ownerExternalId);
+    const normalizedPhone = normalizeRuntimePhone(args.ownerPhone ?? args.ownerExternalId);
+    const ownerName = args.ownerName?.trim() || undefined;
+
+    let profile = null;
+    for (const variant of phoneVariants) {
+        profile = await ctx.db
+            .query("userProfiles")
+            .withIndex("by_phone", (q: any) => q.eq("phone", variant))
+            .first();
+        if (profile) {
+            break;
+        }
+    }
+
+    if (!profile) {
+        const channels = [args.ownerChannel ?? "whatsapp", "phone"];
+        for (const channel of channels) {
+            for (const variant of phoneVariants) {
+                const identity = await ctx.db
+                    .query("userIdentities")
+                    .withIndex("by_channel_external", (q: any) =>
+                        q.eq("channel", channel).eq("externalUserId", variant)
+                    )
+                    .first();
+                if (!identity) {
+                    continue;
+                }
+                profile = await ctx.db.get(identity.userId);
+                if (profile) {
+                    break;
+                }
+            }
+            if (profile) {
+                break;
+            }
+        }
+    }
+
+    if (!profile && normalizedPhone) {
+        const profileId = await ctx.db.insert("userProfiles", {
+            createdAt: now,
+            name: ownerName,
+            nickname: ownerName,
+            phone: normalizedPhone,
+            updatedAt: now,
+        });
+        profile = await ctx.db.get(profileId);
+    }
+
+    if (!profile) {
+        return null;
+    }
+
+    const patch: Record<string, unknown> = {};
+    if (!profile.phone && normalizedPhone) {
+        patch.phone = normalizedPhone;
+    }
+    if (!profile.name && ownerName) {
+        patch.name = ownerName;
+        patch.nickname = ownerName;
+    }
+    if (Object.keys(patch).length > 0) {
+        patch.updatedAt = now;
+        await ctx.db.patch(profile._id, patch);
+        profile = (await ctx.db.get(profile._id)) ?? profile;
+    }
+
+    const identityPairs = [
+        [args.ownerChannel ?? "whatsapp", args.ownerExternalId],
+        ["phone", normalizedPhone],
+    ] as const;
+
+    for (const [channel, externalValue] of identityPairs) {
+        if (!externalValue) {
+            continue;
+        }
+        const existingIdentity = await ctx.db
+            .query("userIdentities")
+            .withIndex("by_channel_external", (q: any) =>
+                q.eq("channel", channel).eq("externalUserId", externalValue)
+            )
+            .first();
+        if (existingIdentity) {
+            if (existingIdentity.userId !== profile._id) {
+                await ctx.db.patch(existingIdentity._id, {
+                    updatedAt: now,
+                    userId: profile._id,
+                });
+            }
+            continue;
+        }
+        await ctx.db.insert("userIdentities", {
+            channel,
+            confidence: 1,
+            createdAt: now,
+            externalUserId: externalValue,
+            metadata: {
+                source: "openclaw-runtime",
+            },
+            updatedAt: now,
+            userId: profile._id,
+            verified: true,
+        });
+    }
+
+    return profile;
+}
+
 /**
  * Returns latest workspace files for a specific category.
  */
@@ -175,6 +330,10 @@ export const syncRuntimeWorkspaceSnapshot = mutation({
                 description: v.optional(v.string()),
                 fileCount: v.optional(v.number()),
                 name: v.string(),
+                ownerChannel: v.optional(v.string()),
+                ownerExternalId: v.optional(v.string()),
+                ownerName: v.optional(v.string()),
+                ownerPhone: v.optional(v.string()),
                 parentAgentId: v.optional(v.string()),
                 parentRuntimePath: v.optional(v.string()),
                 rootPath: v.string(),
@@ -260,6 +419,10 @@ export const syncRuntimeWorkspaceSnapshot = mutation({
             const treeKey = tree.runtimePath ?? `${tree.agentId ?? ""}:${tree.rootPath}`;
             seenTreeKeys.add(treeKey);
             const {
+                ownerChannel: _ownerChannel,
+                ownerExternalId: _ownerExternalId,
+                ownerName: _ownerName,
+                ownerPhone: _ownerPhone,
                 parentAgentId: _parentAgentId,
                 parentRuntimePath: _parentRuntimePath,
                 ...persistedTree
@@ -282,6 +445,19 @@ export const syncRuntimeWorkspaceSnapshot = mutation({
                 existing && existing.source && existing.source !== "openclaw-runtime"
                     ? existing.rootPath
                     : tree.rootPath;
+            const ownerProfile =
+                tree.ownerPhone || tree.ownerExternalId
+                    ? await resolveOrCreateOwnerProfile(
+                          ctx,
+                          {
+                              ownerChannel: tree.ownerChannel,
+                              ownerExternalId: tree.ownerExternalId,
+                              ownerName: tree.ownerName,
+                              ownerPhone: tree.ownerPhone,
+                          },
+                          now,
+                      )
+                    : null;
             let parentId =
                 existing?.parentId ??
                 undefined;
@@ -305,6 +481,7 @@ export const syncRuntimeWorkspaceSnapshot = mutation({
 
             const payload = {
                 ...persistedTree,
+                ownerId: ownerProfile?._id ?? existing?.ownerId,
                 parentId,
                 rootPath: nextRootPath,
                 runtimePath: tree.runtimePath ?? tree.rootPath,

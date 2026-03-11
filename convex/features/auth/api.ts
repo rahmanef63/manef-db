@@ -54,6 +54,46 @@ function normalizePhone(phone: string) {
   return `${hasPlus ? "+" : ""}${digits}`;
 }
 
+function extractPhoneDigits(value: string) {
+  return value.replace(/[^\d]/g, "");
+}
+
+function phoneLookupVariants(phone: string) {
+  const normalized = normalizePhone(phone);
+  const baseDigits = extractPhoneDigits(normalized || phone);
+  const variants = new Set<string>();
+
+  if (!baseDigits) {
+    return [];
+  }
+
+  variants.add(baseDigits);
+  variants.add(`+${baseDigits}`);
+  variants.add(`${baseDigits}@s.whatsapp.net`);
+  variants.add(`${baseDigits}@lid`);
+
+  if (baseDigits.startsWith("0") && baseDigits.length > 1) {
+    const intl = `62${baseDigits.slice(1)}`;
+    variants.add(intl);
+    variants.add(`+${intl}`);
+    variants.add(`${intl}@s.whatsapp.net`);
+    variants.add(`${intl}@lid`);
+  }
+
+  if (baseDigits.startsWith("62")) {
+    variants.add(baseDigits.slice(2));
+    variants.add(`0${baseDigits.slice(2)}`);
+  } else if (baseDigits.startsWith("8")) {
+    const intl = `62${baseDigits}`;
+    variants.add(intl);
+    variants.add(`+${intl}`);
+    variants.add(`${intl}@s.whatsapp.net`);
+    variants.add(`${intl}@lid`);
+  }
+
+  return Array.from(variants).filter(Boolean);
+}
+
 function parseIdentifier(identifier: string) {
   const normalized = identifier.trim();
   if (!normalized) {
@@ -188,33 +228,37 @@ async function createAuditLog(
 }
 
 async function resolveProfileByPhone(ctx: any, phone: string) {
-  const normalizedPhone = normalizePhone(phone);
-  if (!normalizedPhone) {
+  const variants = phoneLookupVariants(phone);
+  if (variants.length === 0) {
     return null;
   }
 
-  const byPhone = await ctx.db
-    .query("userProfiles")
-    .withIndex("by_phone", (q: any) => q.eq("phone", normalizedPhone))
-    .first();
-  if (byPhone) {
-    return byPhone;
+  for (const variant of variants) {
+    const byPhone = await ctx.db
+      .query("userProfiles")
+      .withIndex("by_phone", (q: any) => q.eq("phone", variant))
+      .first();
+    if (byPhone) {
+      return byPhone;
+    }
   }
 
-  const channels = ["whatsapp", "phone"];
+  const channels = ["whatsapp", "phone", "telegram"];
   for (const channel of channels) {
-    const identity = await ctx.db
-      .query("userIdentities")
-      .withIndex("by_channel_external", (q: any) =>
-        q.eq("channel", channel).eq("externalUserId", normalizedPhone)
-      )
-      .first();
-    if (!identity) {
-      continue;
-    }
-    const profile = await ctx.db.get(identity.userId);
-    if (profile) {
-      return profile;
+    for (const variant of variants) {
+      const identity = await ctx.db
+        .query("userIdentities")
+        .withIndex("by_channel_external", (q: any) =>
+          q.eq("channel", channel).eq("externalUserId", variant)
+        )
+        .first();
+      if (!identity) {
+        continue;
+      }
+      const profile = await ctx.db.get(identity.userId);
+      if (profile) {
+        return profile;
+      }
     }
   }
 

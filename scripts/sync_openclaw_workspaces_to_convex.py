@@ -26,6 +26,29 @@ DOC_FILE_CANDIDATES: dict[str, list[str]] = {
 }
 
 
+def extract_owner_phone(value: str | None) -> str | None:
+    if not value:
+        return None
+    digits = "".join(ch for ch in value if ch.isdigit())
+    if not digits:
+        return None
+    if digits.startswith("62"):
+        return f"+{digits}"
+    if digits.startswith("0"):
+        return f"+62{digits[1:]}"
+    if digits.startswith("8"):
+        return f"+62{digits}"
+    return f"+{digits}"
+
+
+def derive_owner_name(agent_name: str | None, agent_id: str) -> str:
+    base = (agent_name or agent_id).strip()
+    for suffix in (" Agent", " Workspace"):
+        if base.endswith(suffix):
+            return base[: -len(suffix)].strip()
+    return base
+
+
 def infer_parent_agent_id(agent_id: str, known_agent_ids: set[str]) -> str | None:
     parts = [part for part in agent_id.split("-") if part]
     if len(parts) <= 1:
@@ -101,11 +124,29 @@ def main() -> int:
         if str(agent.get("id") or "").strip()
     }
     runtime_paths_by_agent: dict[str, str] = {}
+    owner_meta_by_agent: dict[str, dict[str, Any]] = {}
 
     files_payload: list[dict[str, Any]] = []
     trees_payload: list[dict[str, Any]] = []
     agent_payload: list[dict[str, Any]] = []
     bindings_payload: list[dict[str, Any]] = []
+
+    for binding in config.get("bindings", []) or []:
+        agent_id = str(binding.get("agentId") or "").strip()
+        if not agent_id:
+            continue
+        match = binding.get("match") or {}
+        channel = str(match.get("channel") or "").strip()
+        peer = match.get("peer") or {}
+        peer_id = str(peer.get("id") or "").strip()
+        peer_kind = str(peer.get("kind") or "").strip()
+        if channel != "whatsapp" or peer_kind != "direct" or not peer_id:
+            continue
+        owner_meta_by_agent[agent_id] = {
+            "ownerChannel": channel,
+            "ownerExternalId": peer_id,
+            "ownerPhone": extract_owner_phone(peer_id),
+        }
 
     for agent in agents:
         agent_id = str(agent.get("id") or "").strip()
@@ -133,6 +174,23 @@ def main() -> int:
         files_payload.extend(files)
 
         parent_agent_id = infer_parent_agent_id(agent_id, known_agent_ids)
+        owner_meta = owner_meta_by_agent.get(agent_id)
+        if owner_meta is None and parent_agent_id:
+            owner_meta = owner_meta_by_agent.get(parent_agent_id)
+        if owner_meta is None:
+            owner_meta = {}
+        owner_name_source = (
+            next(
+                (
+                    candidate.get("name")
+                    for candidate in agents
+                    if str(candidate.get("id") or "").strip() == parent_agent_id
+                ),
+                agent.get("name"),
+            )
+            if parent_agent_id and owner_meta
+            else agent.get("name")
+        )
 
         tree_entry: dict[str, Any] = {
             "agentId": agent_id,
@@ -145,6 +203,11 @@ def main() -> int:
             "status": "active",
             "type": "agent",
         }
+        if owner_meta:
+            tree_entry["ownerChannel"] = owner_meta.get("ownerChannel")
+            tree_entry["ownerExternalId"] = owner_meta.get("ownerExternalId")
+            tree_entry["ownerName"] = derive_owner_name(owner_name_source, agent_id)
+            tree_entry["ownerPhone"] = owner_meta.get("ownerPhone")
         if parent_agent_id:
             tree_entry["parentAgentId"] = parent_agent_id
             parent_runtime_path = runtime_paths_by_agent.get(parent_agent_id)
