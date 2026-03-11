@@ -26,6 +26,18 @@ DOC_FILE_CANDIDATES: dict[str, list[str]] = {
 }
 
 
+def infer_parent_agent_id(agent_id: str, known_agent_ids: set[str]) -> str | None:
+    parts = [part for part in agent_id.split("-") if part]
+    if len(parts) <= 1:
+        return None
+
+    for end in range(len(parts) - 1, 0, -1):
+        candidate = "-".join(parts[:end])
+        if candidate in known_agent_ids:
+            return candidate
+    return None
+
+
 def resolve_workspace_path(agent_id: str, workspace_value: Any) -> Path | None:
     candidates: list[Path] = []
     if isinstance(workspace_value, str) and workspace_value.strip():
@@ -83,6 +95,12 @@ def read_workspace_docs(workspace_path: Path) -> tuple[dict[str, str], list[dict
 def main() -> int:
     config = load_openclaw_config()
     agents = (config.get("agents") or {}).get("list", []) or []
+    known_agent_ids = {
+        str(agent.get("id") or "").strip()
+        for agent in agents
+        if str(agent.get("id") or "").strip()
+    }
+    runtime_paths_by_agent: dict[str, str] = {}
 
     files_payload: list[dict[str, Any]] = []
     trees_payload: list[dict[str, Any]] = []
@@ -97,25 +115,42 @@ def main() -> int:
         workspace_path = resolve_workspace_path(agent_id, agent.get("workspace"))
         if workspace_path is None:
             continue
+        runtime_paths_by_agent[agent_id] = str(workspace_path)
+
+    for agent in agents:
+        agent_id = str(agent.get("id") or "").strip()
+        if not agent_id:
+            continue
+
+        workspace_path_value = runtime_paths_by_agent.get(agent_id)
+        if workspace_path_value is None:
+            continue
+        workspace_path = Path(workspace_path_value)
 
         docs, files = read_workspace_docs(workspace_path)
         for entry in files:
             entry["agentId"] = agent_id
         files_payload.extend(files)
 
-        trees_payload.append(
-            {
-                "agentId": agent_id,
-                "description": f"Runtime workspace mirror for {agent.get('name') or agent_id}.",
-                "fileCount": len(files),
-                "name": agent.get("name") or agent_id,
-                "rootPath": str(workspace_path),
-                "runtimePath": str(workspace_path),
-                "source": "openclaw-runtime",
-                "status": "active",
-                "type": "agent",
-            }
-        )
+        parent_agent_id = infer_parent_agent_id(agent_id, known_agent_ids)
+
+        tree_entry: dict[str, Any] = {
+            "agentId": agent_id,
+            "description": f"Runtime workspace mirror for {agent.get('name') or agent_id}.",
+            "fileCount": len(files),
+            "name": agent.get("name") or agent_id,
+            "rootPath": str(workspace_path),
+            "runtimePath": str(workspace_path),
+            "source": "openclaw-runtime",
+            "status": "active",
+            "type": "agent",
+        }
+        if parent_agent_id:
+            tree_entry["parentAgentId"] = parent_agent_id
+            parent_runtime_path = runtime_paths_by_agent.get(parent_agent_id)
+            if parent_runtime_path:
+                tree_entry["parentRuntimePath"] = parent_runtime_path
+        trees_payload.append(tree_entry)
         bindings_payload.append(
             {
                 "agentId": agent_id,

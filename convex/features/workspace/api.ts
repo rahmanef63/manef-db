@@ -175,6 +175,8 @@ export const syncRuntimeWorkspaceSnapshot = mutation({
                 description: v.optional(v.string()),
                 fileCount: v.optional(v.number()),
                 name: v.string(),
+                parentAgentId: v.optional(v.string()),
+                parentRuntimePath: v.optional(v.string()),
                 rootPath: v.string(),
                 runtimePath: v.optional(v.string()),
                 source: v.optional(v.string()),
@@ -257,6 +259,11 @@ export const syncRuntimeWorkspaceSnapshot = mutation({
         for (const tree of args.trees) {
             const treeKey = tree.runtimePath ?? `${tree.agentId ?? ""}:${tree.rootPath}`;
             seenTreeKeys.add(treeKey);
+            const {
+                parentAgentId: _parentAgentId,
+                parentRuntimePath: _parentRuntimePath,
+                ...persistedTree
+            } = tree;
 
             const existingByRuntimePath = tree.runtimePath
                 ? await ctx.db
@@ -275,9 +282,30 @@ export const syncRuntimeWorkspaceSnapshot = mutation({
                 existing && existing.source && existing.source !== "openclaw-runtime"
                     ? existing.rootPath
                     : tree.rootPath;
+            let parentId =
+                existing?.parentId ??
+                undefined;
+            if (tree.parentRuntimePath) {
+                const parent = await ctx.db
+                    .query("workspaceTrees")
+                    .withIndex("by_runtimePath", (q) =>
+                        q.eq("runtimePath", tree.parentRuntimePath!)
+                    )
+                    .first();
+                parentId = parent?._id;
+            } else if (tree.parentAgentId) {
+                const parent = await ctx.db
+                    .query("workspaceTrees")
+                    .withIndex("by_agent", (q) =>
+                        q.eq("agentId", tree.parentAgentId!)
+                    )
+                    .first();
+                parentId = parent?._id ?? parentId;
+            }
 
             const payload = {
-                ...tree,
+                ...persistedTree,
+                parentId,
                 rootPath: nextRootPath,
                 runtimePath: tree.runtimePath ?? tree.rootPath,
                 source: tree.source ?? "openclaw-runtime",

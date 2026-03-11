@@ -137,3 +137,31 @@ export const listWorkspaceCoverage = query({
       );
   },
 });
+
+export const listRuntimeWorkspaceHierarchy = query({
+  args: {},
+  handler: async (ctx) => {
+    const trees = (
+      await ctx.db
+        .query("workspaceTrees")
+        .withIndex("by_type", (q) => q.eq("type", "agent"))
+        .collect()
+    )
+      .filter((tree) => tree.source === "openclaw-runtime")
+      .sort((left, right) => left.name.localeCompare(right.name));
+
+    const treesById = new Map(trees.map((tree) => [tree._id, tree]));
+    return trees.map((tree) => ({
+      _id: tree._id,
+      name: tree.name,
+      agentId: tree.agentId ?? null,
+      rootPath: tree.rootPath,
+      runtimePath: tree.runtimePath ?? null,
+      parentId: tree.parentId ?? null,
+      parentAgentId: tree.parentId ? treesById.get(tree.parentId)?.agentId ?? null : null,
+      parentName: tree.parentId ? treesById.get(tree.parentId)?.name ?? null : null,
+      source: tree.source ?? null,
+      type: tree.type,
+    }));
+  },
+});
