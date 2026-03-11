@@ -132,6 +132,25 @@ Write-through note:
 - langkah berikutnya adalah menyambungkan outbox ini ke worker lokal atau webhook
   `n8n`/Gateway executor
 
+## Future product context
+
+Repo ini juga perlu menyiapkan contract backend untuk roadmap berikut:
+
+- `Feature Store`
+- `Agent Builder`
+- integrasi `Superspace Apps`
+
+Target downstream yang disebut saat ini:
+
+- `https://github.com/zianinn/v0-remix-of-superspace-app-aazian.git`
+
+Catatan:
+
+- repo eksternal di atas belum menjadi source of truth backend
+- model data `manef-db` harus tetap netral dan workspace-aware
+- integrasi Superspace sebaiknya dilakukan lewat adapter/publish contract, bukan
+  dengan meniru struktur repo eksternal secara langsung
+
 Sessions volume note:
 
 - `sessions` saat ini disimpan sebagai metadata mirror, bukan full transcript JSONL

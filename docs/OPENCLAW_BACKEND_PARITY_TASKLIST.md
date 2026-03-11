@@ -31,6 +31,44 @@ Task belum selesai bila:
 - [ ] Semua tabel OpenClaw harus punya strategi reconcile:
   insert, patch, soft delete atau mark stale.
 
+## Future context: Feature Store and Superspace
+
+Konteks ini belum selesai dan belum menjadi contract backend resmi, tetapi harus
+diakomodasi mulai sekarang agar model data tidak buntu saat integrasi app
+builder dimulai.
+
+- [ ] Tambahkan model backend untuk `feature store items`.
+- [ ] Bedakan item store:
+  `workspace-app`, `agent-builder`, `shared-block-set`, `template`, `external app`.
+- [ ] `Agent Builder` harus menyimpan dua mode source:
+  `json_blocks` dan `custom_code`.
+- [ ] `json_blocks` harus bisa dirender ulang dari schema/metadata backend tanpa
+  kehilangan struktur block.
+- [ ] `custom_code` harus punya metadata sandbox/review yang jelas, tidak cukup
+  hanya blob string.
+- [ ] Setiap store item harus punya scope:
+  `workspace`, `tenant`, `global`.
+- [ ] Setiap store item harus bisa dikaitkan ke satu atau banyak workspace.
+- [ ] Backend harus siap menyimpan metadata target integrasi `Superspace`.
+
+Konteks integrasi eksternal:
+
+- target repo saat ini:
+  `https://github.com/zianinn/v0-remix-of-superspace-app-aazian.git`
+- status:
+  - repo ini disebut sebagai target downstream
+  - isi internals repo belum diverifikasi langsung oleh tasklist backend ini
+- implikasi arsitektur:
+  - jangan jadikan struktur repo eksternal itu sebagai SSOT backend
+  - siapkan adapter/backend contract agar `Feature Store` bisa publish atau
+    sinkron ke target eksternal tersebut nanti
+
+Definition of done:
+
+- ada schema/table/contract jelas untuk store items
+- item bisa dibaca per workspace dan per visibility scope
+- output builder bisa dipublish ke target eksternal tanpa mengubah model inti
+
 ## Navigator model
 
 - [x] Pertahankan `userProfiles + workspaceTrees + workspaceAgents + agents`
@@ -161,6 +199,10 @@ Definition of done:
 
 - [ ] Jadikan binding channel -> agent sebagai data kelas satu, bukan hanya
   bagian dari blob config.
+- [ ] Tambahkan binding `channel/account -> workspace`.
+- [ ] Tambahkan binding `userIdentity -> workspace`.
+- [ ] Tambahkan policy apakah satu channel bisa mengakses banyak workspace atau
+  hanya satu workspace utama.
 - [ ] Tambahkan read API untuk binding per channel dan per agent.
 - [ ] Tambahkan write API untuk relink binding.
 - [ ] Tambahkan sync dari runtime OpenClaw bindings ke Convex.
@@ -168,8 +210,39 @@ Definition of done:
 Definition of done:
 
 - setiap channel account bisa ditelusuri ke agent tujuan
+- setiap channel account bisa ditelusuri ke workspace tujuan
+- nomor/identity user bisa dipetakan ke workspace yang benar
 - frontend dapat menampilkan binding live tanpa fallback
 - perubahan binding termirror dua arah sesuai mode yang dipilih
+
+## Auth onboarding and access model
+
+- [x] Login identifier mendukung `email` atau `phone`.
+  Bukti:
+  - [api.ts](/home/rahman/projects/manef-db/convex/features/auth/api.ts)
+  - [schema.ts](/home/rahman/projects/manef-db/convex/features/auth/schema.ts)
+  - commit `d2aaa73`
+- [x] Temporary password flow tersambung ke backend.
+  Bukti:
+  - registration request + issue password:
+    [api.ts](/home/rahman/projects/manef-db/convex/features/auth/api.ts)
+  - commit `1ad944b`
+- [x] First login dengan temporary password wajib ganti password.
+  Bukti:
+  - mutation `changePassword`
+  - flag `mustChangePassword`
+  - [api.ts](/home/rahman/projects/manef-db/convex/features/auth/api.ts)
+  - commit `1606fed`
+- [x] Device approval tidak lagi memblok login.
+  Bukti:
+  - policy default `requireDeviceApproval: false`
+  - mutation `setRequireDeviceApproval`
+  - [api.ts](/home/rahman/projects/manef-db/convex/features/auth/api.ts)
+  - commit `8323ae1`
+- [ ] Tambahkan status registry yang jelas untuk request:
+  `pending_workspace`, `ready_for_access`, `approved`, `denied`.
+- [ ] Tambahkan jalur admin reset password sementara tanpa mengubah profile/workspace.
+- [ ] Tambahkan linkage eksplisit `authUser -> userProfile -> userIdentities -> workspace access`.
 
 ## Sessions
 
