@@ -95,6 +95,8 @@ Status parity saat ini:
 - `channels`: live config/binding mirror aktif
 - `gatewayLogs`: live journal snapshot aktif
 - `nodes`: belum full runtime mirror
+- `workspaceChannelBindings`: live runtime mirror aktif
+- `identityWorkspaceBindings`: live runtime mirror aktif
 
 Workspace runtime note:
 
@@ -131,6 +133,23 @@ Write-through note:
   overwrite buta jika runtime/local file berubah lebih dulu
 - langkah berikutnya adalah menyambungkan outbox ini ke worker lokal atau webhook
   `n8n`/Gateway executor
+
+Progress terbaru:
+
+- binding `channel/account -> workspace` sekarang sudah termirror dari runtime
+- binding `userIdentity -> workspace` sekarang sudah termirror dari runtime
+- backend auth sekarang mendukung:
+  - login `email/phone`
+  - registration request
+  - temporary password
+  - first-login password change
+
+Remaining phase terdekat:
+
+- write-through lokal untuk binding manual ke runtime OpenClaw
+- kebijakan apakah satu channel boleh multi-workspace atau single primary workspace
+- schema/backend `Feature Store`
+- schema/backend `Agent Builder`
 
 ## Future product context
 

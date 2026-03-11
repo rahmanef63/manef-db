@@ -199,13 +199,40 @@ Definition of done:
 
 - [ ] Jadikan binding channel -> agent sebagai data kelas satu, bukan hanya
   bagian dari blob config.
-- [ ] Tambahkan binding `channel/account -> workspace`.
-- [ ] Tambahkan binding `userIdentity -> workspace`.
+- [x] Tambahkan binding `channel/account -> workspace`.
+  Bukti:
+  - schema baru:
+    `workspaceChannelBindings` di
+    [channels/schema.ts](/home/rahman/projects/manef-db/convex/features/channels/schema.ts)
+  - sync runtime menerima `workspaceBindings` dan resolve `agentId -> workspace`
+    di [channels/api.ts](/home/rahman/projects/manef-db/convex/features/channels/api.ts)
+  - script runtime mengirim payload binding dari `openclaw.json bindings` di
+    [sync_openclaw_channels_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_channels_to_convex.py)
+- [x] Tambahkan binding `userIdentity -> workspace`.
+  Bukti:
+  - schema baru:
+    `identityWorkspaceBindings` di
+    [channels/schema.ts](/home/rahman/projects/manef-db/convex/features/channels/schema.ts)
+  - sync runtime menerima `identityBindings` dan resolve `userProfile` bila ada
+    di [channels/api.ts](/home/rahman/projects/manef-db/convex/features/channels/api.ts)
 - [ ] Tambahkan policy apakah satu channel bisa mengakses banyak workspace atau
   hanya satu workspace utama.
-- [ ] Tambahkan read API untuk binding per channel dan per agent.
-- [ ] Tambahkan write API untuk relink binding.
+- [x] Tambahkan read API untuk binding per channel dan per agent.
+  Bukti:
+  - `listChannelWorkspaceBindings`
+  - `listIdentityWorkspaceBindings`
+  - `listChannels` kini membawa binding summary
+  - [channels/api.ts](/home/rahman/projects/manef-db/convex/features/channels/api.ts)
+- [x] Tambahkan write API untuk relink binding.
+  Bukti:
+  - `attachWorkspaceChannel`
+  - `detachWorkspaceChannel`
+  - [channels/api.ts](/home/rahman/projects/manef-db/convex/features/channels/api.ts)
 - [ ] Tambahkan sync dari runtime OpenClaw bindings ke Convex.
+- [x] Tambahkan sync dari runtime OpenClaw bindings ke Convex.
+  Bukti:
+  - `syncRuntimeChannels` menerima `workspaceBindings` dan `identityBindings`
+  - [sync_openclaw_channels_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_channels_to_convex.py)
 
 Definition of done:
 
@@ -214,6 +241,16 @@ Definition of done:
 - nomor/identity user bisa dipetakan ke workspace yang benar
 - frontend dapat menampilkan binding live tanpa fallback
 - perubahan binding termirror dua arah sesuai mode yang dipilih
+
+## Remaining phases
+
+- [ ] Phase berikutnya: tambah policy unik apakah satu channel boleh multi-workspace
+  atau single primary workspace.
+- [ ] Phase berikutnya: write-through lokal dari binding manual ke runtime OpenClaw.
+- [ ] Phase berikutnya: menu/admin surface untuk manage binding dari `manef-ui`.
+- [ ] Phase berikutnya: schema/backend untuk `Feature Store`.
+- [ ] Phase berikutnya: schema/backend untuk `Agent Builder` output
+  `json_blocks` dan `custom_code`.
 
 ## Auth onboarding and access model
 

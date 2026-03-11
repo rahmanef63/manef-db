@@ -1,6 +1,77 @@
 import { query, mutation, action } from "../../_generated/server";
 import { v } from "convex/values";
 
+function slugify(value: string) {
+    return value
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 48);
+}
+
+function normalizeRuntimePhone(value: string | undefined) {
+    const trimmed = value?.trim() ?? "";
+    if (!trimmed) {
+        return undefined;
+    }
+    const digits = trimmed.replace(/[^\d]/g, "");
+    if (!digits) {
+        return undefined;
+    }
+    if (digits.startsWith("62")) {
+        return `+${digits}`;
+    }
+    if (digits.startsWith("0")) {
+        return `+62${digits.slice(1)}`;
+    }
+    if (digits.startsWith("8")) {
+        return `+62${digits}`;
+    }
+    return trimmed.startsWith("+") ? `+${digits}` : `+${digits}`;
+}
+
+async function resolveWorkspaceId(
+    ctx: any,
+    args: {
+        agentId?: string;
+        runtimePath?: string;
+        workspaceId?: string;
+        workspaceRootPath?: string;
+    },
+) {
+    if (args.workspaceId) {
+        return args.workspaceId;
+    }
+    if (args.runtimePath) {
+        const byRuntimePath = await ctx.db
+            .query("workspaceTrees")
+            .withIndex("by_runtimePath", (q: any) => q.eq("runtimePath", args.runtimePath))
+            .first();
+        if (byRuntimePath) {
+            return byRuntimePath._id;
+        }
+    }
+    if (args.workspaceRootPath) {
+        const byRootPath = await ctx.db
+            .query("workspaceTrees")
+            .withIndex("by_rootPath", (q: any) => q.eq("rootPath", args.workspaceRootPath))
+            .first();
+        if (byRootPath) {
+            return byRootPath._id;
+        }
+    }
+    if (args.agentId) {
+        const byAgent = await ctx.db
+            .query("workspaceTrees")
+            .withIndex("by_agent", (q: any) => q.eq("agentId", args.agentId))
+            .first();
+        if (byAgent) {
+            return byAgent._id;
+        }
+    }
+    return null;
+}
+
 /**
  * List all configured channels.
  */
@@ -25,11 +96,85 @@ export const listChannels = query({
             authAgeMs: v.optional(v.number()),
             lastError: v.optional(v.string()),
             config: v.optional(v.any()),
+            workspaceBindings: v.array(
+                v.object({
+                    access: v.optional(v.string()),
+                    agentId: v.optional(v.string()),
+                    slug: v.string(),
+                    source: v.optional(v.string()),
+                    workspaceId: v.id("workspaceTrees"),
+                    workspaceName: v.string(),
+                }),
+            ),
+            identityBindings: v.array(
+                v.object({
+                    access: v.optional(v.string()),
+                    channel: v.string(),
+                    externalUserId: v.string(),
+                    normalizedPhone: v.optional(v.string()),
+                    source: v.optional(v.string()),
+                    userId: v.optional(v.id("userProfiles")),
+                    workspaceId: v.id("workspaceTrees"),
+                    workspaceName: v.string(),
+                }),
+            ),
         })
     ),
     handler: async (ctx, args) => {
         const channels = await ctx.db.query("channels").order("desc").take(50);
-        return channels.map((c) => ({
+        return await Promise.all(channels.map(async (c) => {
+            const workspaceLinks = await ctx.db
+                .query("workspaceChannelBindings")
+                .withIndex("by_channel", (q) => q.eq("channelId", c.channelId))
+                .collect();
+            const identityLinks = await ctx.db
+                .query("identityWorkspaceBindings")
+                .withIndex("by_channel_external", (q) => q.eq("channel", c.channelId))
+                .collect();
+
+            const workspaceBindings = (
+                await Promise.all(
+                    workspaceLinks.map(async (link) => {
+                        const workspace = await ctx.db.get(link.workspaceId);
+                        if (!workspace) {
+                            return [];
+                        }
+                        return [{
+                            access: link.access,
+                            agentId: link.agentId,
+                            slug: workspace.agentId?.trim()
+                                ? slugify(workspace.agentId)
+                                : slugify(workspace.name) || "workspace",
+                            source: link.source,
+                            workspaceId: workspace._id,
+                            workspaceName: workspace.name,
+                        }];
+                    }),
+                )
+            ).flat();
+
+            const identityBindings = (
+                await Promise.all(
+                    identityLinks.map(async (link) => {
+                        const workspace = await ctx.db.get(link.workspaceId);
+                        if (!workspace) {
+                            return [];
+                        }
+                        return [{
+                            access: link.access,
+                            channel: link.channel,
+                            externalUserId: link.externalUserId,
+                            normalizedPhone: link.normalizedPhone,
+                            source: link.source,
+                            userId: link.userId,
+                            workspaceId: workspace._id,
+                            workspaceName: workspace.name,
+                        }];
+                    }),
+                )
+            ).flat();
+
+            return {
             _id: c._id,
             _creationTime: c._creationTime,
             channelId: c.channelId,
@@ -47,6 +192,9 @@ export const listChannels = query({
             authAgeMs: c.authAgeMs,
             lastError: c.lastError,
             config: c.config,
+            workspaceBindings,
+            identityBindings,
+        };
         }));
     },
 });
@@ -165,12 +313,50 @@ export const syncRuntimeChannels = mutation({
                 allowList: v.optional(v.array(v.string())),
             })
         ),
+        workspaceBindings: v.optional(
+            v.array(
+                v.object({
+                    access: v.optional(v.string()),
+                    agentId: v.optional(v.string()),
+                    channelId: v.string(),
+                    runtimePath: v.optional(v.string()),
+                    source: v.optional(v.string()),
+                    tenantId: v.optional(v.string()),
+                    workspaceId: v.optional(v.id("workspaceTrees")),
+                    workspaceRootPath: v.optional(v.string()),
+                }),
+            ),
+        ),
+        identityBindings: v.optional(
+            v.array(
+                v.object({
+                    access: v.optional(v.string()),
+                    agentId: v.optional(v.string()),
+                    channel: v.string(),
+                    externalUserId: v.string(),
+                    runtimePath: v.optional(v.string()),
+                    source: v.optional(v.string()),
+                    tenantId: v.optional(v.string()),
+                    workspaceId: v.optional(v.id("workspaceTrees")),
+                    workspaceRootPath: v.optional(v.string()),
+                }),
+            ),
+        ),
     },
-    returns: v.object({ upserted: v.number(), allowListEntries: v.number() }),
+    returns: v.object({
+        allowListEntries: v.number(),
+        identityBindingsUpserted: v.number(),
+        upserted: v.number(),
+        workspaceBindingsUpserted: v.number(),
+    }),
     handler: async (ctx, args) => {
         const now = Date.now();
         let upserted = 0;
         let allowListEntries = 0;
+        let workspaceBindingsUpserted = 0;
+        let identityBindingsUpserted = 0;
+        const seenWorkspaceBindingKeys = new Set<string>();
+        const seenIdentityBindingKeys = new Set<string>();
 
         for (const channel of args.channels) {
             const {
@@ -223,7 +409,264 @@ export const syncRuntimeChannels = mutation({
             upserted++;
         }
 
-        return { upserted, allowListEntries };
+        for (const binding of args.workspaceBindings ?? []) {
+            const workspaceId = await resolveWorkspaceId(ctx, binding);
+            if (!workspaceId) {
+                continue;
+            }
+            const key = `${binding.channelId}:${workspaceId}`;
+            seenWorkspaceBindingKeys.add(key);
+            const existing = await ctx.db
+                .query("workspaceChannelBindings")
+                .withIndex("by_channel_workspace", (q) =>
+                    q.eq("channelId", binding.channelId).eq("workspaceId", workspaceId)
+                )
+                .first();
+            const payload = {
+                access: binding.access ?? "owner",
+                agentId: binding.agentId,
+                channelId: binding.channelId,
+                source: binding.source ?? "openclaw-runtime",
+                tenantId: binding.tenantId,
+                updatedAt: now,
+                workspaceId,
+            };
+            if (existing) {
+                await ctx.db.patch(existing._id, payload);
+            } else {
+                await ctx.db.insert("workspaceChannelBindings", {
+                    ...payload,
+                    createdAt: now,
+                });
+            }
+            workspaceBindingsUpserted++;
+        }
+
+        for (const binding of args.identityBindings ?? []) {
+            const workspaceId = await resolveWorkspaceId(ctx, binding);
+            if (!workspaceId) {
+                continue;
+            }
+            const normalizedPhone = normalizeRuntimePhone(binding.externalUserId);
+            let userId = undefined;
+            const existingProfile = normalizedPhone
+                ? await ctx.db
+                    .query("userProfiles")
+                    .withIndex("by_phone", (q) => q.eq("phone", normalizedPhone))
+                    .first()
+                : null;
+            if (existingProfile) {
+                userId = existingProfile._id;
+            } else {
+                const existingIdentity = await ctx.db
+                    .query("userIdentities")
+                    .withIndex("by_channel_external", (q) =>
+                        q.eq("channel", binding.channel).eq("externalUserId", binding.externalUserId)
+                    )
+                    .first();
+                userId = existingIdentity?.userId;
+            }
+            const key = `${workspaceId}:${binding.channel}:${binding.externalUserId}`;
+            seenIdentityBindingKeys.add(key);
+            const existing = await ctx.db
+                .query("identityWorkspaceBindings")
+                .withIndex("by_workspace_channel_external", (q) =>
+                    q.eq("workspaceId", workspaceId)
+                        .eq("channel", binding.channel)
+                        .eq("externalUserId", binding.externalUserId)
+                )
+                .first();
+            const payload = {
+                access: binding.access ?? "owner",
+                agentId: binding.agentId,
+                channel: binding.channel,
+                externalUserId: binding.externalUserId,
+                normalizedPhone,
+                source: binding.source ?? "openclaw-runtime",
+                tenantId: binding.tenantId,
+                updatedAt: now,
+                userId,
+                workspaceId,
+            };
+            if (existing) {
+                await ctx.db.patch(existing._id, payload);
+            } else {
+                await ctx.db.insert("identityWorkspaceBindings", {
+                    ...payload,
+                    createdAt: now,
+                });
+            }
+            identityBindingsUpserted++;
+        }
+
+        const existingWorkspaceBindings = await ctx.db.query("workspaceChannelBindings").collect();
+        for (const binding of existingWorkspaceBindings) {
+            if (binding.source !== "openclaw-runtime") {
+                continue;
+            }
+            const key = `${binding.channelId}:${binding.workspaceId}`;
+            if (!seenWorkspaceBindingKeys.has(key)) {
+                await ctx.db.delete(binding._id);
+            }
+        }
+
+        const existingIdentityBindings = await ctx.db.query("identityWorkspaceBindings").collect();
+        for (const binding of existingIdentityBindings) {
+            if (binding.source !== "openclaw-runtime") {
+                continue;
+            }
+            const key = `${binding.workspaceId}:${binding.channel}:${binding.externalUserId}`;
+            if (!seenIdentityBindingKeys.has(key)) {
+                await ctx.db.delete(binding._id);
+            }
+        }
+
+        return {
+            upserted,
+            allowListEntries,
+            workspaceBindingsUpserted,
+            identityBindingsUpserted,
+        };
+    },
+});
+
+export const listChannelWorkspaceBindings = query({
+    args: { channelId: v.optional(v.string()), workspaceId: v.optional(v.id("workspaceTrees")) },
+    returns: v.array(
+        v.object({
+            access: v.optional(v.string()),
+            agentId: v.optional(v.string()),
+            channelId: v.string(),
+            source: v.optional(v.string()),
+            workspaceId: v.id("workspaceTrees"),
+            workspaceName: v.string(),
+        }),
+    ),
+    handler: async (ctx, args) => {
+        const rows = await ctx.db.query("workspaceChannelBindings").collect();
+        const filtered = rows.filter((row) =>
+            (!args.channelId || row.channelId === args.channelId) &&
+            (!args.workspaceId || row.workspaceId === args.workspaceId)
+        );
+        return (
+            await Promise.all(
+                filtered.map(async (row) => {
+                    const workspace = await ctx.db.get(row.workspaceId);
+                    if (!workspace) {
+                        return [];
+                    }
+                    return [{
+                        access: row.access,
+                        agentId: row.agentId,
+                        channelId: row.channelId,
+                        source: row.source,
+                        workspaceId: row.workspaceId,
+                        workspaceName: workspace.name,
+                    }];
+                }),
+            )
+        ).flat();
+    },
+});
+
+export const listIdentityWorkspaceBindings = query({
+    args: { workspaceId: v.optional(v.id("workspaceTrees")), channel: v.optional(v.string()) },
+    returns: v.array(
+        v.object({
+            access: v.optional(v.string()),
+            channel: v.string(),
+            externalUserId: v.string(),
+            normalizedPhone: v.optional(v.string()),
+            source: v.optional(v.string()),
+            userId: v.optional(v.id("userProfiles")),
+            workspaceId: v.id("workspaceTrees"),
+            workspaceName: v.string(),
+        }),
+    ),
+    handler: async (ctx, args) => {
+        const rows = await ctx.db.query("identityWorkspaceBindings").collect();
+        const filtered = rows.filter((row) =>
+            (!args.workspaceId || row.workspaceId === args.workspaceId) &&
+            (!args.channel || row.channel === args.channel)
+        );
+        return (
+            await Promise.all(
+                filtered.map(async (row) => {
+                    const workspace = await ctx.db.get(row.workspaceId);
+                    if (!workspace) {
+                        return [];
+                    }
+                    return [{
+                        access: row.access,
+                        channel: row.channel,
+                        externalUserId: row.externalUserId,
+                        normalizedPhone: row.normalizedPhone,
+                        source: row.source,
+                        userId: row.userId,
+                        workspaceId: row.workspaceId,
+                        workspaceName: workspace.name,
+                    }];
+                }),
+            )
+        ).flat();
+    },
+});
+
+export const attachWorkspaceChannel = mutation({
+    args: {
+        access: v.optional(v.string()),
+        agentId: v.optional(v.string()),
+        channelId: v.string(),
+        source: v.optional(v.string()),
+        tenantId: v.optional(v.string()),
+        workspaceId: v.id("workspaceTrees"),
+    },
+    returns: v.id("workspaceChannelBindings"),
+    handler: async (ctx, args) => {
+        const now = Date.now();
+        const existing = await ctx.db
+            .query("workspaceChannelBindings")
+            .withIndex("by_channel_workspace", (q) =>
+                q.eq("channelId", args.channelId).eq("workspaceId", args.workspaceId)
+            )
+            .first();
+        const payload = {
+            access: args.access ?? "manual",
+            agentId: args.agentId,
+            channelId: args.channelId,
+            source: args.source ?? "manual",
+            tenantId: args.tenantId,
+            updatedAt: now,
+            workspaceId: args.workspaceId,
+        };
+        if (existing) {
+            await ctx.db.patch(existing._id, payload);
+            return existing._id;
+        }
+        return await ctx.db.insert("workspaceChannelBindings", {
+            ...payload,
+            createdAt: now,
+        });
+    },
+});
+
+export const detachWorkspaceChannel = mutation({
+    args: {
+        channelId: v.string(),
+        workspaceId: v.id("workspaceTrees"),
+    },
+    returns: v.null(),
+    handler: async (ctx, args) => {
+        const existing = await ctx.db
+            .query("workspaceChannelBindings")
+            .withIndex("by_channel_workspace", (q) =>
+                q.eq("channelId", args.channelId).eq("workspaceId", args.workspaceId)
+            )
+            .first();
+        if (existing) {
+            await ctx.db.delete(existing._id);
+        }
+        return null;
     },
 });
 

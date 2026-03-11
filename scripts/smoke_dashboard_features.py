@@ -56,6 +56,22 @@ def main() -> int:
 
     channels = run_convex("features/channels/api:listChannels", {})
     require(isinstance(channels, list) and len(channels) > 0, "channels must be non-empty")
+    workspace_channel_bindings = run_convex(
+        "features/channels/api:listChannelWorkspaceBindings",
+        {},
+    )
+    require(
+        isinstance(workspace_channel_bindings, list),
+        "workspace channel bindings response must be a list",
+    )
+    identity_workspace_bindings = run_convex(
+        "features/channels/api:listIdentityWorkspaceBindings",
+        {},
+    )
+    require(
+        isinstance(identity_workspace_bindings, list),
+        "identity workspace bindings response must be a list",
+    )
 
     config_entries = run_convex("features/config/api:listConfig", {"tenantId": "rahman-main"})
     require(
@@ -134,6 +150,8 @@ def main() -> int:
                 "agents": len(agents),
                 "skills": len(skills),
                 "channels": len(channels),
+                "workspaceChannelBindings": len(workspace_channel_bindings),
+                "identityWorkspaceBindings": len(identity_workspace_bindings),
                 "configEntries": len(config_entries),
                 "workspaceDocs": len(workspace_docs),
                 "cronJobs": len(cron_jobs),
