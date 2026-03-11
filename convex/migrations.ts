@@ -72,6 +72,7 @@ export const fixUsersWithoutAgents = internalMutation({
         ownerId: workspace.ownerId,
         parentId: workspace._id,
         rootPath: buildAgentRootPath(workspace.rootPath, agentId),
+        source: "migration",
         status: "active",
         type: "agent",
         updatedAt: now,

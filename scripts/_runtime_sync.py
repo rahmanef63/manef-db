@@ -13,6 +13,7 @@ from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 STATE_DIR = Path(os.path.expanduser("~/.local/state/manef-db/openclaw-runtime-sync"))
+OPENCLAW_ROOT = Path(os.path.expanduser("~/.openclaw"))
 OPENCLAW_CONFIG_PATH = Path(os.path.expanduser("~/.openclaw/openclaw.json"))
 OPENCLAW_BIN = os.environ.get("OPENCLAW_BIN", os.path.expanduser("~/.local/bin/openclaw"))
 TENANT_ID = os.environ.get("APP_TENANT_ID", "rahman-main")

@@ -63,6 +63,15 @@ def main() -> int:
         "config entries must be non-empty",
     )
 
+    workspace_docs = run_convex(
+        "features/workspace/api:getFiles",
+        {"category": "identityMd", "tenantId": "rahman-main"},
+    )
+    require(
+        isinstance(workspace_docs, list) and len(workspace_docs) > 0,
+        "workspace runtime documents must be non-empty",
+    )
+
     cron_jobs = run_convex("features/crons/api:listJobs", {})
     require(isinstance(cron_jobs, list), "cron jobs response must be a list")
 
@@ -126,6 +135,7 @@ def main() -> int:
                 "skills": len(skills),
                 "channels": len(channels),
                 "configEntries": len(config_entries),
+                "workspaceDocs": len(workspace_docs),
                 "cronJobs": len(cron_jobs),
                 "logsChecked": len(logs),
                 "nodes": len(nodes),

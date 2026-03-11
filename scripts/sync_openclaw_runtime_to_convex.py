@@ -9,6 +9,7 @@ from pathlib import Path
 
 SCRIPTS = [
     "sync_openclaw_agents_to_convex.py",
+    "sync_openclaw_workspaces_to_convex.py",
     "sync_openclaw_sessions_to_convex.py",
     "sync_openclaw_config_to_convex.py",
     "sync_openclaw_crons_to_convex.py",

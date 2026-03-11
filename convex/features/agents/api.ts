@@ -75,7 +75,9 @@ export const getAgents = query({
                     agentId: agent.agentId,
                     name: agent.name,
                     description: agent.agentsMd,
-                    workspacePath: workspaceTree?.rootPath,
+                    workspacePath:
+                        (workspaceTree as { runtimePath?: string } | null)?.runtimePath ??
+                        workspaceTree?.rootPath,
                     agentDir:
                         typeof config.agentDir === "string" ? config.agentDir : undefined,
                     boundChannels: Array.from(new Set(boundChannels)),
@@ -133,6 +135,16 @@ export const syncRuntimeAgents = mutation({
                 model: v.optional(v.string()),
                 lastActiveAt: v.optional(v.number()),
                 capabilities: v.optional(v.array(v.string())),
+                workspacePath: v.optional(v.string()),
+                agentDir: v.optional(v.string()),
+                agentsMd: v.optional(v.string()),
+                bootstrapMd: v.optional(v.string()),
+                heartbeatMd: v.optional(v.string()),
+                identityMd: v.optional(v.string()),
+                memoryMd: v.optional(v.string()),
+                soulMd: v.optional(v.string()),
+                toolsMd: v.optional(v.string()),
+                userMd: v.optional(v.string()),
                 config: v.optional(v.any()),
                 tenantId: v.optional(v.string()),
             })
@@ -147,6 +159,11 @@ export const syncRuntimeAgents = mutation({
         const tenantIds = new Set<string>();
 
         for (const agent of args.agents) {
+            const {
+                workspacePath,
+                agentDir,
+                ...agentPayload
+            } = agent;
             if (agent.tenantId) {
                 tenantIds.add(agent.tenantId);
             }
@@ -157,11 +174,13 @@ export const syncRuntimeAgents = mutation({
                 .withIndex("by_agentId", (q) => q.eq("agentId", agent.agentId))
                 .first();
             const payload = {
-                ...agent,
-                status: agent.status ?? "active",
+                ...agentPayload,
+                status: agentPayload.status ?? "active",
                 config: {
                     ...(existing?.config ?? {}),
-                    ...(agent.config ?? {}),
+                    ...(agentPayload.config ?? {}),
+                    runtimeWorkspacePath: workspacePath,
+                    agentDir: agentDir ?? agentPayload.config?.agentDir ?? existing?.config?.agentDir,
                     runtimeSource: "openclaw.json",
                 },
                 createdAt: existing?.createdAt ?? now,

@@ -48,6 +48,7 @@
     "test:smoke": "python3 scripts/smoke_dashboard_features.py",
     "sync:runtime": "python3 scripts/sync_openclaw_runtime_to_convex.py",
     "sync:runtime:agents": "python3 scripts/sync_openclaw_agents_to_convex.py",
+    "sync:runtime:workspaces": "python3 scripts/sync_openclaw_workspaces_to_convex.py",
     "sync:runtime:sessions": "python3 scripts/sync_openclaw_sessions_to_convex.py",
     "sync:runtime:config": "python3 scripts/sync_openclaw_config_to_convex.py",
     "sync:runtime:crons": "python3 scripts/sync_openclaw_crons_to_convex.py",

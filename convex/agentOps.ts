@@ -94,6 +94,7 @@ export const createSubAgent = mutation({
       ownerId: args.userId,
       parentId: parentWorkspace?._id ?? userWorkspace?._id,
       rootPath: buildChildAgentRootPath(basePath, subAgentId),
+      source: "manual",
       status: "active",
       type: "agent",
       updatedAt: now,

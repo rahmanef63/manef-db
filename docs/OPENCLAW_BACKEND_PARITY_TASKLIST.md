@@ -39,6 +39,17 @@ Task belum selesai bila:
   `contact/user`, `root workspace`, `agent`, `sub-agent`, `channel binding`.
 - [ ] Tambahkan source metadata pada `workspaceTrees` agar jelas node ini berasal
   dari onboarding, migration, atau runtime sync.
+- [x] Bedakan navigator path dari runtime filesystem path.
+  Bukti:
+  - `workspaceTrees` sekarang punya `runtimePath` dan `source`
+  - onboarding/migration/manual insert menandai `source`
+  - runtime mirror patch hanya mengisi `runtimePath` pada tree existing, tanpa
+    memaksa `rootPath` synthetic ikut berubah
+  - [schema.ts](/home/rahman/projects/manef-db/convex/features/workspace/schema.ts)
+  - [api.ts](/home/rahman/projects/manef-db/convex/features/workspace/api.ts)
+  - [onboarding.ts](/home/rahman/projects/manef-db/convex/onboarding.ts)
+  - [migrations.ts](/home/rahman/projects/manef-db/convex/migrations.ts)
+  - [agentOps.ts](/home/rahman/projects/manef-db/convex/agentOps.ts)
 
 Definition of done:
 
@@ -81,6 +92,19 @@ Tasks:
   - commit `3fd3851`
 - [ ] Tambahkan table atau metadata untuk parent-child agent relationship bila
   belum cukup diwakili oleh `workspaceTrees`.
+- [x] Mirror dokumen inti workspace agent ke DB.
+  Bukti:
+  - script:
+    [sync_openclaw_workspaces_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_workspaces_to_convex.py)
+  - script membaca canonical docs:
+    `AGENTS.md`, `SOUL.md`, `USER.md`, `TOOLS.md`, `MEMORY.md`,
+    `HEARTBEAT.md`, `IDENTITY.md`, `BOOTSTRAP.md`
+    dengan fallback lowercase jika ada
+  - hasil sync nyata:
+    `workspace files upserted=104`, `trees upserted=16`
+  - `syncRuntimeAgents` sekarang menerima patch dokumen inti dan
+    `workspacePath/agentDir`
+  - [api.ts](/home/rahman/projects/manef-db/convex/features/agents/api.ts)
 
 Definition of done:
 
@@ -357,6 +381,44 @@ Definition of done:
     `crons upserted=1`, `skills upserted=60`,
     `channels upserted=2 allowListEntries=18`, `logs upserted=81`
 - [ ] Simpan sync audit di tabel khusus bila perlu.
+- [x] Tambahkan runtime workspace mirror ke daftar sync resmi.
+  Bukti:
+  - script baru:
+    [sync_openclaw_workspaces_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_workspaces_to_convex.py)
+  - wrapper:
+    [sync_openclaw_runtime_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_runtime_to_convex.py)
+  - package script:
+    [package.json](/home/rahman/projects/manef-db/package.json)
+
+## Workspace files
+
+- [x] Finalisasi `workspaceFiles` sebagai mirror file inti workspace runtime.
+  Bukti:
+  - schema `workspaceFiles` sekarang menyimpan `source`
+  - mutation bulk:
+    `syncRuntimeWorkspaceSnapshot`
+  - [schema.ts](/home/rahman/projects/manef-db/convex/features/workspace/schema.ts)
+  - [api.ts](/home/rahman/projects/manef-db/convex/features/workspace/api.ts)
+- [x] Mirror file inti per workspace OpenClaw ke Convex.
+  Bukti:
+  - source runtime:
+    `~/.openclaw/workspace*`
+  - file canonical yang dibaca:
+    `AGENTS.md`, `SOUL.md`, `USER.md`, `TOOLS.md`, `MEMORY.md`,
+    `HEARTBEAT.md`, `IDENTITY.md`, `BOOTSTRAP.md`
+  - hasil sync nyata:
+    `filesUpserted=104`
+- [x] Tampilkan file runtime melalui query Convex.
+  Bukti:
+  - `getFiles` sekarang mengembalikan `agentId`, `source`, `syncStatus`
+  - smoke test production memverifikasi kategori `identityMd`
+  - [smoke_dashboard_features.py](/home/rahman/projects/manef-db/scripts/smoke_dashboard_features.py)
+
+Definition of done:
+
+- file inti workspace ada di Convex setelah sync
+- agent bisa ditautkan kembali ke file runtime yang benar
+- UI dapat membaca file runtime dari DB tanpa mock
 - [x] Siapkan fondasi outbox untuk write-through lokal.
   Bukti:
   - tabel + API `syncOutbox`, `syncRuns`, `syncState`
@@ -393,6 +455,8 @@ Definition of done:
 - [x] Jalankan mirror config.
 - [x] Jalankan mirror crons.
 - [ ] Jalankan mirror nodes.
+- [x] Jalankan mirror workspaces.
+- [x] Verifikasi workspace docs terbaca dari Convex.
 - [x] Jalankan mirror logs.
 - [ ] Jalankan mirror skills.
 - [ ] Verifikasi `openclawNavigator:listScopes`.

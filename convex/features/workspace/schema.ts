@@ -27,6 +27,7 @@ export const workspaceSchema = {
         ownerId: v.optional(v.id("userProfiles")),
         parsedData: v.optional(v.any()),
         path: v.string(),
+        source: v.optional(v.string()),
         syncStatus: v.optional(v.string()),
         tags: v.optional(v.array(v.string())),
         tenantId: v.optional(v.string()),
@@ -50,6 +51,8 @@ export const workspaceSchema = {
         ownerId: v.optional(v.id("userProfiles")),
         parentId: v.optional(v.id("workspaceTrees")),
         rootPath: v.string(),
+        runtimePath: v.optional(v.string()),
+        source: v.optional(v.string()),
         status: v.string(),
         type: v.string(),
         updatedAt: v.float64(),
@@ -58,5 +61,6 @@ export const workspaceSchema = {
         .index("by_owner", ["ownerId"])
         .index("by_parent", ["parentId"])
         .index("by_rootPath", ["rootPath"])
+        .index("by_runtimePath", ["runtimePath"])
         .index("by_type", ["type"]),
 };

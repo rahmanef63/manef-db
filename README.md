@@ -57,6 +57,7 @@ untuk beberapa panel yang dipakai `manef-ui`.
 Entry points:
 
 - `npm run sync:runtime:agents`
+- `npm run sync:runtime:workspaces`
 - `npm run sync:runtime:sessions`
 - `npm run sync:runtime:config`
 - `npm run sync:runtime:crons`
@@ -69,6 +70,7 @@ Source runtime yang aktif saat ini:
 
 - `openclaw skills list --json`
 - `~/.openclaw/openclaw.json`
+- `~/.openclaw/workspace*`
 - `~/.openclaw/cron/jobs.json`
 - `journalctl --user-unit openclaw-gateway -o json`
 
@@ -82,6 +84,7 @@ Scheduler VPS:
 Status parity saat ini:
 
 - `agents`: live registry mirror aktif
+- `workspaceFiles`: live workspace document mirror aktif
 - `sessions`: live session store mirror aktif
 - `configEntries`: live sanitized config mirror aktif
 - `cronJobs`: live cron store mirror aktif
@@ -89,6 +92,21 @@ Status parity saat ini:
 - `channels`: live config/binding mirror aktif
 - `gatewayLogs`: live journal snapshot aktif
 - `nodes`: belum full runtime mirror
+
+Workspace runtime note:
+
+- OpenClaw memakai filesystem workspace nyata seperti:
+  `~/.openclaw/workspace`, `~/.openclaw/workspace-si-coder`,
+  `~/.openclaw/workspace-irul`, dst
+- repo ini sekarang memisahkan:
+  - `workspaceTrees.rootPath` untuk navigator/business scope
+  - `workspaceTrees.runtimePath` untuk path filesystem runtime yang nyata
+- dokumen inti workspace agent dimirror ke:
+  - tabel `workspaceFiles`
+  - subset field agent seperti `soulMd`, `identityMd`, `toolsMd`, `userMd`
+- canonical file yang dimirror:
+  `AGENTS.md`, `SOUL.md`, `USER.md`, `TOOLS.md`, `MEMORY.md`,
+  `HEARTBEAT.md`, `IDENTITY.md`, `BOOTSTRAP.md`
 
 Bridge note:
 
