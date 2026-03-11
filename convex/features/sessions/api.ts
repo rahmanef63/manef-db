@@ -68,6 +68,81 @@ export const createSession = mutation({
     },
 });
 
+/**
+ * Bulk-sync runtime-mirrored sessions from OpenClaw local stores.
+ */
+export const syncRuntimeSessions = mutation({
+    args: {
+        sessions: v.array(
+            v.object({
+                sessionKey: v.string(),
+                agentId: v.optional(v.string()),
+                channel: v.optional(v.string()),
+                status: v.optional(v.string()),
+                messageCount: v.optional(v.number()),
+                createdAt: v.number(),
+                lastActiveAt: v.number(),
+                tenantId: v.optional(v.string()),
+                metadata: v.optional(v.any()),
+            })
+        ),
+    },
+    returns: v.object({ upserted: v.number(), deleted: v.number() }),
+    handler: async (ctx, args) => {
+        const now = Date.now();
+        let upserted = 0;
+        let deleted = 0;
+        const seen = new Set<string>();
+        const tenantIds = new Set<string>();
+
+        for (const session of args.sessions) {
+            if (session.tenantId) {
+                tenantIds.add(session.tenantId);
+            }
+            seen.add(`${session.tenantId ?? ""}::${session.sessionKey}`);
+            const existing = await ctx.db
+                .query("sessions")
+                .withIndex("by_sessionKey", (q) => q.eq("sessionKey", session.sessionKey))
+                .first();
+            const payload = {
+                ...session,
+                status: session.status ?? "active",
+                messageCount: session.messageCount ?? 0,
+                metadata: {
+                    ...(existing?.metadata ?? {}),
+                    ...(session.metadata ?? {}),
+                    source: "openclaw-runtime",
+                },
+            };
+            if (existing) {
+                await ctx.db.patch(existing._id, payload);
+            } else {
+                await ctx.db.insert("sessions", payload);
+            }
+            upserted++;
+        }
+
+        for (const tenantId of tenantIds) {
+            const existingSessions = await ctx.db
+                .query("sessions")
+                .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+                .collect();
+            for (const session of existingSessions) {
+                if (session.metadata?.source !== "openclaw-runtime") {
+                    continue;
+                }
+                if (!seen.has(`${tenantId}::${session.sessionKey}`)) {
+                    await ctx.db.delete(session._id);
+                    deleted++;
+                }
+            }
+        }
+
+        void now;
+        return { upserted, deleted };
+    },
+});
+
 export const deleteSession = mutation({
     args: { id: v.id("sessions") },
     returns: v.null(),

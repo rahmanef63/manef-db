@@ -56,6 +56,8 @@ untuk beberapa panel yang dipakai `manef-ui`.
 
 Entry points:
 
+- `npm run sync:runtime:agents`
+- `npm run sync:runtime:sessions`
 - `npm run sync:runtime:config`
 - `npm run sync:runtime:crons`
 - `npm run sync:runtime:skills`
@@ -79,6 +81,8 @@ Scheduler VPS:
 
 Status parity saat ini:
 
+- `agents`: live registry mirror aktif
+- `sessions`: live session store mirror aktif
 - `configEntries`: live sanitized config mirror aktif
 - `cronJobs`: live cron store mirror aktif
 - `skills`: live mirror aktif

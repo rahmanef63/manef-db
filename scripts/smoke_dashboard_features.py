@@ -29,6 +29,7 @@ def main() -> int:
         {"agentIds": scope_agent_ids} if scope_agent_ids else {},
     )
     require(isinstance(agents, list), "agents response must be a list")
+    require(len(agents) > 0, "agents must be non-empty")
 
     skills = run_convex("features/skills/api:listSkills", {})
     require(isinstance(skills, list) and len(skills) > 0, "skills must be non-empty")
@@ -79,6 +80,12 @@ def main() -> int:
         )
 
     session_key = f"smoke:{uuid.uuid4().hex}"
+    runtime_sessions = run_convex(
+        "features/sessions/api:getSessions",
+        {"includeUnknown": True, "limit": 20},
+    )
+    require(isinstance(runtime_sessions, list), "runtime sessions response must be a list")
+
     session_id = run_convex(
         "features/sessions/api:createSession",
         {"sessionKey": session_key},

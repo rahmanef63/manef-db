@@ -61,7 +61,14 @@ Tasks:
 - [ ] Simpan metadata penting:
   `agentId`, `name`, `type`, `status`, `owner`, `tenantId`, `config`,
   `agentDir`, `bindings`, `workspace path`, `lastSeenAt`.
-- [ ] Tambahkan upsert runtime sync dari OpenClaw official CLI/runtime.
+- [x] Tambahkan upsert runtime sync dari OpenClaw official CLI/runtime.
+  Bukti:
+  - bulk mutation `syncRuntimeAgents`
+  - script:
+    [sync_openclaw_agents_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_agents_to_convex.py)
+  - wrapper runtime:
+    [sync_openclaw_runtime_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_runtime_to_convex.py)
+  - hasil sync nyata: `upserted=16`
 - [ ] Bedakan agent root, specialized agent, dan sub-agent.
 - [ ] Pastikan create/update/delete agent punya jalur yang jelas:
   manual admin atau runtime mirror.
@@ -99,11 +106,22 @@ Definition of done:
 ## Sessions
 
 - [ ] Pertahankan `sessions` sebagai mirror session runtime.
+- [x] Pertahankan `sessions` sebagai mirror session runtime.
+  Bukti:
+  - bulk mutation `syncRuntimeSessions`
+  - script:
+    [sync_openclaw_sessions_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_sessions_to_convex.py)
+  - hasil sync nyata: `upserted=15`
 - [ ] Pastikan key canonical mengikuti model runtime yang stabil.
 - [ ] Simpan metadata:
   `sessionKey`, `canonicalSessionKey`, `agentId`, `channel`, `userId`,
   `messageCount`, `firstTs`, `lastTs`, `rawUserRef`.
-- [ ] Tambahkan sync job resmi dari file/runtime OpenClaw ke Convex.
+- [x] Tambahkan sync job resmi dari file/runtime OpenClaw ke Convex.
+  Bukti:
+  - source runtime: `~/.openclaw/agents/*/sessions/sessions.json`
+    dan `*.jsonl`
+  - script:
+    [sync_openclaw_sessions_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_sessions_to_convex.py)
 - [ ] Tambahkan mark stale/archive untuk session yang hilang dari runtime.
 
 Definition of done:
@@ -300,6 +318,8 @@ Definition of done:
   - wrapper:
     [sync_openclaw_runtime_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_runtime_to_convex.py)
   - entrypoint per runtime:
+    [sync_openclaw_agents_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_agents_to_convex.py),
+    [sync_openclaw_sessions_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_sessions_to_convex.py),
     [sync_openclaw_config_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_config_to_convex.py),
     [sync_openclaw_crons_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_crons_to_convex.py),
     [sync_openclaw_skills_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_skills_to_convex.py),
@@ -315,8 +335,9 @@ Definition of done:
   Bukti:
   - current scripts output JSON summary per sync job
   - contoh hasil nyata:
-    `config upserted=115`, `crons upserted=1`, `skills upserted=60`,
-    `channels upserted=2 allowListEntries=18`, `logs upserted=200`
+    `agents upserted=16`, `sessions upserted=15`, `config upserted=119`,
+    `crons upserted=1`, `skills upserted=60`,
+    `channels upserted=2 allowListEntries=18`, `logs upserted=81`
 - [ ] Simpan sync audit di tabel khusus bila perlu.
 
 ## Feature smoke tests
@@ -342,8 +363,8 @@ Definition of done:
   Bukti:
   - `npm run deploy:ci` berhasil publish ke `https://peaceful-dove-887.convex.cloud`
   - deployment dilakukan setelah commit `3fd3851`
-- [ ] Jalankan mirror agents.
-- [ ] Jalankan mirror sessions.
+- [x] Jalankan mirror agents.
+- [x] Jalankan mirror sessions.
 - [x] Jalankan mirror channels.
 - [x] Jalankan mirror config.
 - [x] Jalankan mirror crons.

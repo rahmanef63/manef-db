@@ -120,6 +120,86 @@ export const deployAgent = mutation({
 });
 
 /**
+ * Upsert runtime-mirrored agents from OpenClaw config.
+ */
+export const syncRuntimeAgents = mutation({
+    args: {
+        agents: v.array(
+            v.object({
+                agentId: v.string(),
+                name: v.string(),
+                type: v.string(),
+                status: v.optional(v.string()),
+                model: v.optional(v.string()),
+                lastActiveAt: v.optional(v.number()),
+                capabilities: v.optional(v.array(v.string())),
+                config: v.optional(v.any()),
+                tenantId: v.optional(v.string()),
+            })
+        ),
+    },
+    returns: v.object({ upserted: v.number(), deleted: v.number() }),
+    handler: async (ctx, args) => {
+        const now = Date.now();
+        let upserted = 0;
+        let deleted = 0;
+        const seen = new Set<string>();
+        const tenantIds = new Set<string>();
+
+        for (const agent of args.agents) {
+            if (agent.tenantId) {
+                tenantIds.add(agent.tenantId);
+            }
+            seen.add(`${agent.tenantId ?? ""}::${agent.agentId}`);
+
+            const existing = await ctx.db
+                .query("agents")
+                .withIndex("by_agentId", (q) => q.eq("agentId", agent.agentId))
+                .first();
+            const payload = {
+                ...agent,
+                status: agent.status ?? "active",
+                config: {
+                    ...(existing?.config ?? {}),
+                    ...(agent.config ?? {}),
+                    runtimeSource: "openclaw.json",
+                },
+                createdAt: existing?.createdAt ?? now,
+                updatedAt: now,
+            };
+
+            if (existing) {
+                await ctx.db.patch(existing._id, payload);
+            } else {
+                await ctx.db.insert("agents", payload);
+            }
+            upserted++;
+        }
+
+        for (const tenantId of tenantIds) {
+            const existingAgents = await ctx.db
+                .query("agents")
+                .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+                .collect();
+            for (const agent of existingAgents) {
+                if (agent.config?.runtimeSource !== "openclaw.json") {
+                    continue;
+                }
+                if (!seen.has(`${tenantId}::${agent.agentId}`)) {
+                    await ctx.db.patch(agent._id, {
+                        status: "inactive",
+                        updatedAt: now,
+                    });
+                    deleted++;
+                }
+            }
+        }
+
+        return { upserted, deleted };
+    },
+});
+
+/**
  * Triggers an agent task (mock action).
  */
 export const runAgentTask = action({
