@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -27,13 +29,26 @@ def load_openclaw_config() -> dict[str, Any]:
 
 
 def run_convex(fn: str, args: dict[str, Any]) -> Any:
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as fh:
+        json.dump(args, fh, ensure_ascii=False)
+        args_path = fh.name
+
+    command = (
+        f"npx convex run {shlex.quote(fn)} "
+        f"\"$(cat {shlex.quote(args_path)})\""
+    )
     proc = subprocess.run(
-        ["npx", "convex", "run", fn, json.dumps(args)],
+        ["/bin/bash", "-lc", command],
         cwd=PROJECT_ROOT,
         capture_output=True,
         text=True,
         env=os.environ.copy(),
     )
+    try:
+        os.unlink(args_path)
+    except FileNotFoundError:
+        pass
+
     if proc.returncode != 0:
         raise RuntimeError((proc.stderr or proc.stdout).strip())
 
