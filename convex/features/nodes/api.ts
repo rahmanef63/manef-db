@@ -35,6 +35,47 @@ export const listNodes = query({
     },
 });
 
+export const listNodeBindings = query({
+    args: {
+        agentIds: v.optional(v.array(v.string())),
+    },
+    returns: v.array(
+        v.object({
+            _id: v.id("nodeBindings"),
+            agentId: v.string(),
+            nodeId: v.string(),
+            nodeHost: v.optional(v.string()),
+            nodeName: v.optional(v.string()),
+        }),
+    ),
+    handler: async (ctx, args) => {
+        const bindings = await ctx.db.query("nodeBindings").collect();
+        const allowedAgentIds = args.agentIds ? new Set(args.agentIds) : null;
+        const filteredBindings = bindings.filter((binding) => {
+            if (allowedAgentIds && !allowedAgentIds.has(binding.agentId)) {
+                return false;
+            }
+            return true;
+        });
+
+        return Promise.all(
+            filteredBindings.map(async (binding) => {
+                const node = await ctx.db
+                    .query("nodes")
+                    .withIndex("by_nodeId", (q) => q.eq("nodeId", binding.nodeId))
+                    .first();
+                return {
+                    _id: binding._id,
+                    agentId: binding.agentId,
+                    nodeId: binding.nodeId,
+                    nodeHost: node?.host,
+                    nodeName: node?.name,
+                };
+            }),
+        );
+    },
+});
+
 /**
  * Get exec approvals for a given host.
  */
