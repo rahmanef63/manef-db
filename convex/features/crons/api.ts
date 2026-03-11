@@ -1,6 +1,36 @@
 import { query, mutation, action } from "../../_generated/server";
 import { v } from "convex/values";
 
+async function enqueueOutbox(
+    ctx: { db: { insert: (...args: any[]) => Promise<any> } },
+    args: {
+        entityKey: string;
+        entityType: string;
+        operation: string;
+        payload?: unknown;
+        source?: string;
+        tenantId?: string;
+    },
+) {
+    const now = Date.now();
+    const eventId = `${args.entityType}:${args.entityKey}:${args.operation}:${now}`;
+    return await ctx.db.insert("syncOutbox", {
+        attemptCount: 0,
+        createdAt: now,
+        entityKey: args.entityKey,
+        entityType: args.entityType,
+        eventId,
+        lastError: undefined,
+        operation: args.operation,
+        payload: args.payload,
+        processedAt: undefined,
+        source: args.source ?? "dashboard",
+        status: "pending",
+        tenantId: args.tenantId,
+        updatedAt: now,
+    });
+}
+
 /**
  * List all cron jobs.
  */
@@ -137,16 +167,31 @@ export const createJob = mutation({
         tenantId: v.optional(v.string()),
         source: v.optional(v.string()),
     },
-    returns: v.id("cronJobs"),
+    returns: v.object({
+        jobId: v.id("cronJobs"),
+        outboxId: v.id("syncOutbox"),
+    }),
     handler: async (ctx, args) => {
         const now = Date.now();
-        return await ctx.db.insert("cronJobs", {
+        const jobId = await ctx.db.insert("cronJobs", {
             ...args,
             source: args.source ?? "manual",
             runCount: 0,
             createdAt: now,
             updatedAt: now,
         });
+        const outboxId = await enqueueOutbox(ctx, {
+            entityKey: `${args.tenantId ?? ""}:${jobId}`,
+            entityType: "cron",
+            operation: "create",
+            payload: {
+                jobId,
+                ...args,
+            },
+            source: "dashboard",
+            tenantId: args.tenantId,
+        });
+        return { jobId, outboxId };
     },
 });
 
@@ -166,15 +211,39 @@ export const updateJob = mutation({
         delivery: v.optional(v.string()),
         enabled: v.optional(v.boolean()),
         isolated: v.optional(v.boolean()),
+        expectedUpdatedAt: v.optional(v.number()),
     },
     returns: v.null(),
     handler: async (ctx, args) => {
-        const { id, ...rest } = args;
+        const { id, expectedUpdatedAt, ...rest } = args;
+        const existing = await ctx.db.get(id);
+        if (!existing) return null;
+        if (
+            expectedUpdatedAt !== undefined &&
+            existing.updatedAt !== expectedUpdatedAt
+        ) {
+            throw new Error(
+                `Cron conflict for ${existing.name}: expected updatedAt=${expectedUpdatedAt}, actual=${existing.updatedAt}`
+            );
+        }
         const updates: Record<string, unknown> = { updatedAt: Date.now() };
         for (const [key, val] of Object.entries(rest)) {
             if (val !== undefined) updates[key] = val;
         }
         await ctx.db.patch(id, updates);
+        await enqueueOutbox(ctx, {
+            entityKey: `${existing.tenantId ?? ""}:${existing.runtimeJobId ?? id}`,
+            entityType: "cron",
+            operation: "update",
+            payload: {
+                jobId: id,
+                runtimeJobId: existing.runtimeJobId,
+                expectedUpdatedAt,
+                ...rest,
+            },
+            source: "dashboard",
+            tenantId: existing.tenantId,
+        });
         return null;
     },
 });
@@ -279,9 +348,34 @@ export const syncRuntimeJobs = mutation({
  * Delete a cron job.
  */
 export const deleteJob = mutation({
-    args: { id: v.id("cronJobs") },
+    args: {
+        id: v.id("cronJobs"),
+        expectedUpdatedAt: v.optional(v.number()),
+    },
     returns: v.null(),
     handler: async (ctx, args) => {
+        const existing = await ctx.db.get(args.id);
+        if (!existing) return null;
+        if (
+            args.expectedUpdatedAt !== undefined &&
+            existing.updatedAt !== args.expectedUpdatedAt
+        ) {
+            throw new Error(
+                `Cron conflict for ${existing.name}: expected updatedAt=${args.expectedUpdatedAt}, actual=${existing.updatedAt}`
+            );
+        }
+        await enqueueOutbox(ctx, {
+            entityKey: `${existing.tenantId ?? ""}:${existing.runtimeJobId ?? args.id}`,
+            entityType: "cron",
+            operation: "delete",
+            payload: {
+                jobId: args.id,
+                runtimeJobId: existing.runtimeJobId,
+                expectedUpdatedAt: args.expectedUpdatedAt,
+            },
+            source: "dashboard",
+            tenantId: existing.tenantId,
+        });
         await ctx.db.delete(args.id);
         return null;
     },
@@ -341,7 +435,7 @@ export const listRuns = query({
 export const triggerRun = action({
     args: { jobId: v.id("cronJobs") },
     returns: v.null(),
-    handler: async (ctx, args) => {
+    handler: async (_ctx, args) => {
         console.log(`Manually triggering cron job: ${args.jobId}`);
         return null;
     },

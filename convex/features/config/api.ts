@@ -1,6 +1,36 @@
 import { query, mutation, action } from "../../_generated/server";
 import { v } from "convex/values";
 
+async function enqueueOutbox(
+    ctx: { db: { insert: (...args: any[]) => Promise<any> } },
+    args: {
+        entityKey: string;
+        entityType: string;
+        operation: string;
+        payload?: unknown;
+        source?: string;
+        tenantId?: string;
+    },
+) {
+    const now = Date.now();
+    const eventId = `${args.entityType}:${args.entityKey}:${args.operation}:${now}`;
+    return await ctx.db.insert("syncOutbox", {
+        attemptCount: 0,
+        createdAt: now,
+        entityKey: args.entityKey,
+        entityType: args.entityType,
+        eventId,
+        lastError: undefined,
+        operation: args.operation,
+        payload: args.payload,
+        processedAt: undefined,
+        source: args.source ?? "dashboard",
+        status: "pending",
+        tenantId: args.tenantId,
+        updatedAt: now,
+    });
+}
+
 /**
  * List config entries, optionally by category.
  */
@@ -101,25 +131,65 @@ export const setConfig = mutation({
         tenantId: v.optional(v.string()),
         source: v.optional(v.string()),
         runtimePath: v.optional(v.string()),
+        expectedUpdatedAt: v.optional(v.number()),
     },
-    returns: v.id("configEntries"),
+    returns: v.object({
+        entryId: v.id("configEntries"),
+        outboxId: v.optional(v.id("syncOutbox")),
+    }),
     handler: async (ctx, args) => {
+        const {
+            expectedUpdatedAt,
+            ...writeArgs
+        } = args;
         const existing = await ctx.db
             .query("configEntries")
             .withIndex("by_tenant_key", (q) =>
-                q.eq("tenantId", args.tenantId).eq("key", args.key)
+                q.eq("tenantId", writeArgs.tenantId).eq("key", writeArgs.key)
             )
             .first();
+        if (
+            expectedUpdatedAt !== undefined &&
+            existing &&
+            existing.updatedAt !== expectedUpdatedAt
+        ) {
+            throw new Error(
+                `Config conflict for ${writeArgs.key}: expected updatedAt=${expectedUpdatedAt}, actual=${existing.updatedAt}`
+            );
+        }
         const payload = {
-            ...args,
-            source: args.source ?? "manual",
+            ...writeArgs,
+            source: writeArgs.source ?? "manual",
             updatedAt: Date.now(),
         };
+        let entryId;
         if (existing) {
             await ctx.db.patch(existing._id, payload);
-            return existing._id;
+            entryId = existing._id;
+        } else {
+            entryId = await ctx.db.insert("configEntries", payload);
         }
-        return await ctx.db.insert("configEntries", payload);
+        const outboxId = await enqueueOutbox(ctx, {
+            entityKey: `${writeArgs.tenantId ?? ""}:${writeArgs.key}`,
+            entityType: "config",
+            operation: "upsert",
+            payload: {
+                key: writeArgs.key,
+                value: writeArgs.value,
+                category: writeArgs.category,
+                description: writeArgs.description,
+                tags: writeArgs.tags,
+                valueType: writeArgs.valueType,
+                defaultValue: writeArgs.defaultValue,
+                runtimePath: writeArgs.runtimePath,
+                tenantId: writeArgs.tenantId,
+                entryId,
+                expectedUpdatedAt,
+            },
+            source: "dashboard",
+            tenantId: writeArgs.tenantId,
+        });
+        return { entryId, outboxId };
     },
 });
 
@@ -204,9 +274,35 @@ export const syncRuntimeConfig = mutation({
  * Delete a config entry.
  */
 export const deleteConfig = mutation({
-    args: { id: v.id("configEntries") },
+    args: {
+        id: v.id("configEntries"),
+        expectedUpdatedAt: v.optional(v.number()),
+    },
     returns: v.null(),
     handler: async (ctx, args) => {
+        const existing = await ctx.db.get(args.id);
+        if (!existing) return null;
+        if (
+            args.expectedUpdatedAt !== undefined &&
+            existing.updatedAt !== args.expectedUpdatedAt
+        ) {
+            throw new Error(
+                `Config conflict for ${existing.key}: expected updatedAt=${args.expectedUpdatedAt}, actual=${existing.updatedAt}`
+            );
+        }
+        await enqueueOutbox(ctx, {
+            entityKey: `${existing.tenantId ?? ""}:${existing.key}`,
+            entityType: "config",
+            operation: "delete",
+            payload: {
+                key: existing.key,
+                tenantId: existing.tenantId,
+                runtimePath: existing.runtimePath,
+                expectedUpdatedAt: args.expectedUpdatedAt,
+            },
+            source: "dashboard",
+            tenantId: existing.tenantId,
+        });
         await ctx.db.delete(args.id);
         return null;
     },
@@ -218,7 +314,7 @@ export const deleteConfig = mutation({
 export const reloadConfig = action({
     args: {},
     returns: v.null(),
-    handler: async (ctx) => {
+    handler: async (_ctx) => {
         console.log("Reloading configuration from gateway...");
         return null;
     },

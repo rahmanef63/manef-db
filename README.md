@@ -98,6 +98,25 @@ Bridge note:
 - `n8n` baru masuk akal jika nanti dibutuhkan orchestration atau write-through
   lintas sistem yang lebih kompleks
 
+Write-through note:
+
+- write manual dari dashboard belum menulis file OpenClaw lokal secara langsung
+- jalur aman yang sedang dipakai adalah:
+  `dashboard mutation -> Convex row update -> syncOutbox event -> worker/webhook lokal`
+- `config` dan `crons` sekarang sudah mengeluarkan `syncOutbox` event untuk
+  create/update/delete manual
+- write manual tersebut juga bisa memakai `expectedUpdatedAt` untuk mencegah
+  overwrite buta jika runtime/local file berubah lebih dulu
+- langkah berikutnya adalah menyambungkan outbox ini ke worker lokal atau webhook
+  `n8n`/Gateway executor
+
+Sessions volume note:
+
+- `sessions` saat ini disimpan sebagai metadata mirror, bukan full transcript JSONL
+- ini sengaja dilakukan agar biaya write/read Convex tetap terkendali
+- jika UI butuh isi transcript penuh, jalur yang benar adalah fetch on-demand
+  dari executor lokal, bukan mirror seluruh JSONL ke Convex secara terus-menerus
+
 ## Local development
 
 1. Run `npm install` in this repo.

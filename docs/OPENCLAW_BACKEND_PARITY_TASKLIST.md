@@ -265,7 +265,18 @@ Definition of done:
   - field sensitif di-redact sebelum dikirim ke Convex
 - [ ] Tambahkan reload/apply config nyata, atau tandai read-only bila belum
   bisa write-through.
-- [ ] Tambahkan hash/version metadata untuk mencegah overwrite buta.
+- [x] Tambahkan guard konflik minimum untuk write manual.
+  Bukti:
+  - `setConfig` dan `deleteConfig` menerima `expectedUpdatedAt` opsional
+  - bila record sudah berubah, mutation melempar error conflict
+  - [api.ts](/home/rahman/projects/manef-db/convex/features/config/api.ts)
+- [x] Tambahkan outbox event untuk write-through config.
+  Bukti:
+  - `setConfig` membuat `syncOutbox` event `config/upsert`
+  - `deleteConfig` membuat `syncOutbox` event `config/delete`
+  - [api.ts](/home/rahman/projects/manef-db/convex/features/config/api.ts)
+- [ ] Tambahkan hash/version metadata yang lebih kuat dari sekadar `updatedAt`
+  bila write-through lokal sudah diaktifkan.
 
 Definition of done:
 
@@ -290,6 +301,13 @@ Definition of done:
     [sync_openclaw_runtime_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_runtime_to_convex.py)
   - hasil sync nyata: `upserted=1`
 - [ ] Tambahkan mutation untuk enable/disable/edit schedule.
+- [x] Tambahkan queue write-through untuk create/update/delete cron.
+  Bukti:
+  - `createJob` membuat `syncOutbox` event `cron/create`
+  - `updateJob` membuat `syncOutbox` event `cron/update`
+  - `deleteJob` membuat `syncOutbox` event `cron/delete`
+  - `updateJob` dan `deleteJob` menerima `expectedUpdatedAt` opsional
+  - [api.ts](/home/rahman/projects/manef-db/convex/features/crons/api.ts)
 - [ ] Tambahkan action manual trigger yang benar.
 
 Definition of done:
@@ -339,6 +357,12 @@ Definition of done:
     `crons upserted=1`, `skills upserted=60`,
     `channels upserted=2 allowListEntries=18`, `logs upserted=81`
 - [ ] Simpan sync audit di tabel khusus bila perlu.
+- [x] Siapkan fondasi outbox untuk write-through lokal.
+  Bukti:
+  - tabel + API `syncOutbox`, `syncRuns`, `syncState`
+    di [core/schema.ts](/home/rahman/projects/manef-db/convex/features/core/schema.ts)
+    dan [core/api.ts](/home/rahman/projects/manef-db/convex/features/core/api.ts)
+  - `config` dan `crons` sekarang sudah memakai outbox saat write manual
 
 ## Feature smoke tests
 
