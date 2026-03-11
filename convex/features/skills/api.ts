@@ -15,6 +15,8 @@ export const listSkills = query({
             description: v.optional(v.string()),
             source: v.string(),
             enabled: v.boolean(),
+            runtimeEnabled: v.optional(v.boolean()),
+            hasManualOverride: v.optional(v.boolean()),
             version: v.optional(v.string()),
             toolCount: v.optional(v.number()),
         })
@@ -47,6 +49,8 @@ export const listSkills = query({
             description: s.description,
             source: s.source,
             enabled: s.enabled,
+            runtimeEnabled: s.config?.runtimeEnabled,
+            hasManualOverride: s.config?.manualOverrideEnabled !== undefined,
             version: s.version,
             toolCount: s.toolCount,
         }));
@@ -60,7 +64,20 @@ export const toggleSkill = mutation({
     args: { id: v.id("skills"), enabled: v.boolean() },
     returns: v.null(),
     handler: async (ctx, args) => {
-        await ctx.db.patch(args.id, { enabled: args.enabled, updatedAt: Date.now() });
+        const existing = await ctx.db.get(args.id);
+        if (!existing) {
+            return null;
+        }
+        await ctx.db.patch(args.id, {
+            enabled: args.enabled,
+            config: {
+                ...(existing.config ?? {}),
+                manualOverrideEnabled: args.enabled,
+                runtimeEnabled:
+                    existing.config?.runtimeEnabled ?? existing.enabled,
+            },
+            updatedAt: Date.now(),
+        });
         return null;
     },
 });
@@ -122,14 +139,32 @@ export const syncRuntimeSkills = mutation({
                 .withIndex("by_skillId", (q) => q.eq("skillId", skill.skillId))
                 .first();
 
+            const runtimeEnabled = skill.enabled;
+            const manualOverrideEnabled =
+                existing?.config?.manualOverrideEnabled;
+            const effectiveEnabled =
+                manualOverrideEnabled !== undefined
+                    ? manualOverrideEnabled
+                    : runtimeEnabled;
+            const config = {
+                ...(existing?.config ?? {}),
+                ...(skill.config ?? {}),
+                runtimeEnabled,
+                manualOverrideEnabled,
+            };
+
             if (existing) {
                 await ctx.db.patch(existing._id, {
                     ...skill,
+                    enabled: effectiveEnabled,
+                    config,
                     updatedAt: now,
                 });
             } else {
                 await ctx.db.insert("skills", {
                     ...skill,
+                    enabled: effectiveEnabled,
+                    config,
                     createdAt: now,
                     updatedAt: now,
                 });

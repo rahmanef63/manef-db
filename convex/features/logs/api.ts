@@ -8,6 +8,7 @@ export const getRecentLogs = query({
     args: {
         level: v.optional(v.string()),
         source: v.optional(v.string()),
+        searchText: v.optional(v.string()),
         limit: v.optional(v.number()),
     },
     returns: v.array(
@@ -32,7 +33,7 @@ export const getRecentLogs = query({
         } else {
             logs = await ctx.db.query("gatewayLogs").order("desc").take(takeCount);
         }
-        return logs.map((l) => ({
+        let mapped = logs.map((l) => ({
             _id: l._id,
             _creationTime: l._creationTime,
             level: l.level,
@@ -40,6 +41,17 @@ export const getRecentLogs = query({
             message: l.message,
             timestamp: l.timestamp,
         }));
+        if (args.source) {
+            mapped = mapped.filter((log) => log.source === args.source);
+        }
+        if (args.searchText) {
+            const needle = args.searchText.toLowerCase();
+            mapped = mapped.filter((log) =>
+                log.message.toLowerCase().includes(needle) ||
+                log.source.toLowerCase().includes(needle)
+            );
+        }
+        return mapped;
     },
 });
 

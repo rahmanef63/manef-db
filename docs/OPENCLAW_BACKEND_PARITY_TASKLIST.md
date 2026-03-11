@@ -185,6 +185,10 @@ Definition of done:
   - hasil sync awal: `upserted=200`
 - [ ] Tambahkan filter source/level/time di backend agar frontend tidak perlu
   memfilter besar-besaran.
+- [x] Tambahkan filter source/text dasar di backend.
+  Bukti:
+  - `getRecentLogs` sekarang menerima `source` dan `searchText`
+  - [api.ts](/home/rahman/projects/manef-db/convex/features/logs/api.ts)
 - [ ] Tentukan retention policy dan cleanup policy.
 
 Definition of done:
@@ -214,6 +218,12 @@ Definition of done:
     [sync_openclaw_skills_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_skills_to_convex.py)
   - timer service aktif menjalankan sync berkala
 - [ ] Tambahkan toggle enable/disable yang konsisten dengan runtime.
+- [x] Tambahkan toggle enable/disable yang konsisten dengan sync berikutnya.
+  Bukti:
+  - `toggleSkill` menyimpan `config.manualOverrideEnabled`
+  - `syncRuntimeSkills` menjaga override tetap hidup sambil menyimpan
+    `config.runtimeEnabled`
+  - [api.ts](/home/rahman/projects/manef-db/convex/features/skills/api.ts)
 
 Definition of done:
 
@@ -279,6 +289,17 @@ Definition of done:
   - contoh hasil nyata:
     `skills upserted=60`, `channels upserted=2 allowListEntries=18`, `logs upserted=200`
 - [ ] Simpan sync audit di tabel khusus bila perlu.
+
+## Feature smoke tests
+
+- [x] Tambahkan smoke test backend untuk fitur dashboard utama.
+  Bukti:
+  - [smoke_dashboard_features.py](/home/rahman/projects/manef-db/scripts/smoke_dashboard_features.py)
+  - script menguji:
+    `openclawNavigator`, `agents`, `skills toggle`, `channels`, `logs`,
+    `sessions create/delete`, `nodes`
+  - package script:
+    [package.json](/home/rahman/projects/manef-db/package.json)
 
 Definition of done:
 

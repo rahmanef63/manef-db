@@ -19,8 +19,12 @@ export const listChannels = query({
             connected: v.optional(v.boolean()),
             mode: v.optional(v.string()),
             lastStartAt: v.optional(v.number()),
+            lastProbeAt: v.optional(v.number()),
             lastConnectAt: v.optional(v.number()),
+            lastMessageAt: v.optional(v.number()),
+            authAgeMs: v.optional(v.number()),
             lastError: v.optional(v.string()),
+            config: v.optional(v.any()),
         })
     ),
     handler: async (ctx, args) => {
@@ -37,8 +41,12 @@ export const listChannels = query({
             connected: c.connected,
             mode: c.mode,
             lastStartAt: c.lastStartAt,
+            lastProbeAt: c.lastProbeAt,
             lastConnectAt: c.lastConnectAt,
+            lastMessageAt: c.lastMessageAt,
+            authAgeMs: c.authAgeMs,
             lastError: c.lastError,
+            config: c.config,
         }));
     },
 });
