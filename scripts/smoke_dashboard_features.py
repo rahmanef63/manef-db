@@ -56,6 +56,15 @@ def main() -> int:
     channels = run_convex("features/channels/api:listChannels", {})
     require(isinstance(channels, list) and len(channels) > 0, "channels must be non-empty")
 
+    config_entries = run_convex("features/config/api:listConfig", {"tenantId": "rahman-main"})
+    require(
+        isinstance(config_entries, list) and len(config_entries) > 0,
+        "config entries must be non-empty",
+    )
+
+    cron_jobs = run_convex("features/crons/api:listJobs", {})
+    require(isinstance(cron_jobs, list), "cron jobs response must be a list")
+
     logs = run_convex("features/logs/api:getRecentLogs", {"limit": 5})
     require(isinstance(logs, list), "logs response must be a list")
     if logs:
@@ -109,6 +118,8 @@ def main() -> int:
                 "agents": len(agents),
                 "skills": len(skills),
                 "channels": len(channels),
+                "configEntries": len(config_entries),
+                "cronJobs": len(cron_jobs),
                 "logsChecked": len(logs),
                 "nodes": len(nodes),
                 "timestamp": int(time.time() * 1000),

@@ -10,6 +10,7 @@ export const listJobs = query({
         v.object({
             _id: v.id("cronJobs"),
             _creationTime: v.number(),
+            runtimeJobId: v.optional(v.string()),
             name: v.string(),
             description: v.optional(v.string()),
             agentId: v.optional(v.string()),
@@ -19,16 +20,25 @@ export const listJobs = query({
             delivery: v.optional(v.string()),
             enabled: v.boolean(),
             isolated: v.optional(v.boolean()),
+            deleteAfterRun: v.optional(v.boolean()),
+            sessionTarget: v.optional(v.string()),
+            wakeMode: v.optional(v.string()),
+            failureAlert: v.optional(v.boolean()),
+            source: v.optional(v.string()),
             lastRunAt: v.optional(v.number()),
             lastRunStatus: v.optional(v.string()),
             nextRunAt: v.optional(v.number()),
         })
     ),
     handler: async (ctx, args) => {
-        const jobs = await ctx.db.query("cronJobs").order("desc").take(100);
+        let jobs = await ctx.db.query("cronJobs").order("desc").take(100);
+        if (args.enabled !== undefined) {
+            jobs = jobs.filter((job) => job.enabled === args.enabled);
+        }
         return jobs.map((j) => ({
             _id: j._id,
             _creationTime: j._creationTime,
+            runtimeJobId: j.runtimeJobId,
             name: j.name,
             description: j.description,
             agentId: j.agentId,
@@ -38,6 +48,11 @@ export const listJobs = query({
             delivery: j.delivery,
             enabled: j.enabled,
             isolated: j.isolated,
+            deleteAfterRun: j.deleteAfterRun,
+            sessionTarget: j.sessionTarget,
+            wakeMode: j.wakeMode,
+            failureAlert: j.failureAlert,
+            source: j.source,
             lastRunAt: j.lastRunAt,
             lastRunStatus: j.lastRunStatus,
             nextRunAt: j.nextRunAt,
@@ -54,6 +69,7 @@ export const getJob = query({
         v.object({
             _id: v.id("cronJobs"),
             _creationTime: v.number(),
+            runtimeJobId: v.optional(v.string()),
             name: v.string(),
             description: v.optional(v.string()),
             agentId: v.optional(v.string()),
@@ -65,6 +81,11 @@ export const getJob = query({
             delivery: v.optional(v.string()),
             enabled: v.boolean(),
             isolated: v.optional(v.boolean()),
+            deleteAfterRun: v.optional(v.boolean()),
+            sessionTarget: v.optional(v.string()),
+            wakeMode: v.optional(v.string()),
+            failureAlert: v.optional(v.boolean()),
+            source: v.optional(v.string()),
             nextRunAt: v.optional(v.number()),
         }),
         v.null()
@@ -75,6 +96,7 @@ export const getJob = query({
         return {
             _id: job._id,
             _creationTime: job._creationTime,
+            runtimeJobId: job.runtimeJobId,
             name: job.name,
             description: job.description,
             agentId: job.agentId,
@@ -86,6 +108,11 @@ export const getJob = query({
             delivery: job.delivery,
             enabled: job.enabled,
             isolated: job.isolated,
+            deleteAfterRun: job.deleteAfterRun,
+            sessionTarget: job.sessionTarget,
+            wakeMode: job.wakeMode,
+            failureAlert: job.failureAlert,
+            source: job.source,
             nextRunAt: job.nextRunAt,
         };
     },
@@ -108,12 +135,14 @@ export const createJob = mutation({
         enabled: v.boolean(),
         isolated: v.optional(v.boolean()),
         tenantId: v.optional(v.string()),
+        source: v.optional(v.string()),
     },
     returns: v.id("cronJobs"),
     handler: async (ctx, args) => {
         const now = Date.now();
         return await ctx.db.insert("cronJobs", {
             ...args,
+            source: args.source ?? "manual",
             runCount: 0,
             createdAt: now,
             updatedAt: now,
@@ -147,6 +176,102 @@ export const updateJob = mutation({
         }
         await ctx.db.patch(id, updates);
         return null;
+    },
+});
+
+/**
+ * Bulk-sync cron jobs from OpenClaw runtime store.
+ */
+export const syncRuntimeJobs = mutation({
+    args: {
+        jobs: v.array(
+            v.object({
+                runtimeJobId: v.string(),
+                name: v.string(),
+                description: v.optional(v.string()),
+                agentId: v.optional(v.string()),
+                schedule: v.string(),
+                interval: v.optional(v.string()),
+                intervalMs: v.optional(v.number()),
+                cronExpression: v.optional(v.string()),
+                prompt: v.optional(v.string()),
+                delivery: v.optional(v.string()),
+                enabled: v.boolean(),
+                isolated: v.optional(v.boolean()),
+                deleteAfterRun: v.optional(v.boolean()),
+                sessionTarget: v.optional(v.string()),
+                wakeMode: v.optional(v.string()),
+                failureAlert: v.optional(v.boolean()),
+                lastRunAt: v.optional(v.number()),
+                lastRunStatus: v.optional(v.string()),
+                nextRunAt: v.optional(v.number()),
+                runCount: v.optional(v.number()),
+                tenantId: v.optional(v.string()),
+                source: v.optional(v.string()),
+                createdAt: v.optional(v.number()),
+                updatedAt: v.optional(v.number()),
+            })
+        ),
+    },
+    returns: v.object({ upserted: v.number(), deleted: v.number() }),
+    handler: async (ctx, args) => {
+        let upserted = 0;
+        let deleted = 0;
+        const seen = new Set<string>();
+        const tenantIds = new Set<string>();
+        const now = Date.now();
+
+        for (const job of args.jobs) {
+            const tenantId = job.tenantId;
+            if (tenantId) {
+                tenantIds.add(tenantId);
+            }
+            seen.add(`${tenantId ?? ""}::${job.runtimeJobId}`);
+
+            const existing = tenantId
+                ? await ctx.db
+                      .query("cronJobs")
+                      .withIndex("by_tenant_runtimeJobId", (q) =>
+                          q.eq("tenantId", tenantId).eq("runtimeJobId", job.runtimeJobId)
+                      )
+                      .first()
+                : await ctx.db
+                      .query("cronJobs")
+                      .withIndex("by_runtimeJobId", (q) => q.eq("runtimeJobId", job.runtimeJobId))
+                      .first();
+
+            const payload = {
+                ...job,
+                source: job.source ?? "openclaw-runtime",
+                createdAt: job.createdAt ?? existing?.createdAt ?? now,
+                updatedAt: job.updatedAt ?? now,
+            };
+
+            if (existing) {
+                await ctx.db.patch(existing._id, payload);
+            } else {
+                await ctx.db.insert("cronJobs", payload);
+            }
+            upserted++;
+        }
+
+        for (const tenantId of tenantIds) {
+            const existingJobs = await ctx.db
+                .query("cronJobs")
+                .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+                .collect();
+            for (const job of existingJobs) {
+                if (job.source !== "openclaw-runtime" || !job.runtimeJobId) {
+                    continue;
+                }
+                if (!seen.has(`${tenantId}::${job.runtimeJobId}`)) {
+                    await ctx.db.delete(job._id);
+                    deleted++;
+                }
+            }
+        }
+
+        return { upserted, deleted };
     },
 });
 

@@ -17,19 +17,22 @@ export const listConfig = query({
             tags: v.optional(v.array(v.string())),
             valueType: v.optional(v.string()),
             defaultValue: v.optional(v.string()),
+            source: v.optional(v.string()),
+            runtimePath: v.optional(v.string()),
         })
     ),
     handler: async (ctx, args) => {
-        let entries;
+        let entries = args.tenantId
+            ? await ctx.db
+                  .query("configEntries")
+                  .withIndex("by_tenant", (q) => q.eq("tenantId", args.tenantId!))
+                  .collect()
+            : await ctx.db.query("configEntries").collect();
         if (args.category) {
-            entries = await ctx.db
-                .query("configEntries")
-                .withIndex("by_category", (q) => q.eq("category", args.category!))
-                .order("asc")
-                .take(500);
-        } else {
-            entries = await ctx.db.query("configEntries").order("asc").take(500);
+            entries = entries.filter((entry) => entry.category === args.category);
         }
+        entries.sort((left, right) => left.key.localeCompare(right.key));
+        entries = entries.slice(0, 500);
         return entries.map((e) => ({
             _id: e._id,
             _creationTime: e._creationTime,
@@ -40,6 +43,8 @@ export const listConfig = query({
             tags: e.tags,
             valueType: e.valueType,
             defaultValue: e.defaultValue,
+            source: e.source,
+            runtimePath: e.runtimePath,
         }));
     },
 });
@@ -57,6 +62,8 @@ export const getConfig = query({
             category: v.string(),
             description: v.optional(v.string()),
             valueType: v.optional(v.string()),
+            source: v.optional(v.string()),
+            runtimePath: v.optional(v.string()),
         }),
         v.null()
     ),
@@ -73,6 +80,8 @@ export const getConfig = query({
             category: entry.category,
             description: entry.description,
             valueType: entry.valueType,
+            source: entry.source,
+            runtimePath: entry.runtimePath,
         };
     },
 });
@@ -90,21 +99,104 @@ export const setConfig = mutation({
         valueType: v.optional(v.string()),
         defaultValue: v.optional(v.string()),
         tenantId: v.optional(v.string()),
+        source: v.optional(v.string()),
+        runtimePath: v.optional(v.string()),
     },
     returns: v.id("configEntries"),
     handler: async (ctx, args) => {
         const existing = await ctx.db
             .query("configEntries")
-            .withIndex("by_key", (q) => q.eq("key", args.key))
+            .withIndex("by_tenant_key", (q) =>
+                q.eq("tenantId", args.tenantId).eq("key", args.key)
+            )
             .first();
+        const payload = {
+            ...args,
+            source: args.source ?? "manual",
+            updatedAt: Date.now(),
+        };
         if (existing) {
-            await ctx.db.patch(existing._id, { ...args, updatedAt: Date.now() });
+            await ctx.db.patch(existing._id, payload);
             return existing._id;
         }
-        return await ctx.db.insert("configEntries", {
-            ...args,
-            updatedAt: Date.now(),
-        });
+        return await ctx.db.insert("configEntries", payload);
+    },
+});
+
+/**
+ * Bulk-sync runtime-mirrored OpenClaw config entries.
+ */
+export const syncRuntimeConfig = mutation({
+    args: {
+        entries: v.array(
+            v.object({
+                key: v.string(),
+                value: v.string(),
+                category: v.string(),
+                description: v.optional(v.string()),
+                tags: v.optional(v.array(v.string())),
+                valueType: v.optional(v.string()),
+                defaultValue: v.optional(v.string()),
+                source: v.optional(v.string()),
+                runtimePath: v.optional(v.string()),
+                tenantId: v.optional(v.string()),
+            })
+        ),
+    },
+    returns: v.object({
+        upserted: v.number(),
+        deleted: v.number(),
+    }),
+    handler: async (ctx, args) => {
+        const now = Date.now();
+        let upserted = 0;
+        let deleted = 0;
+        const seen = new Set<string>();
+        const tenantIds = new Set<string>();
+
+        for (const entry of args.entries) {
+            const tenantId = entry.tenantId;
+            const source = entry.source ?? "openclaw-runtime";
+            if (tenantId) {
+                tenantIds.add(tenantId);
+            }
+            seen.add(`${tenantId ?? ""}::${entry.key}`);
+            const existing = await ctx.db
+                .query("configEntries")
+                .withIndex("by_tenant_key", (q) =>
+                    q.eq("tenantId", tenantId).eq("key", entry.key)
+                )
+                .first();
+            const payload = {
+                ...entry,
+                source,
+                updatedAt: now,
+            };
+            if (existing) {
+                await ctx.db.patch(existing._id, payload);
+            } else {
+                await ctx.db.insert("configEntries", payload);
+            }
+            upserted++;
+        }
+
+        for (const tenantId of tenantIds) {
+            const existingEntries = await ctx.db
+                .query("configEntries")
+                .withIndex("by_tenant", (q) => q.eq("tenantId", tenantId))
+                .collect();
+            for (const entry of existingEntries) {
+                if (entry.source !== "openclaw-runtime") {
+                    continue;
+                }
+                if (!seen.has(`${tenantId}::${entry.key}`)) {
+                    await ctx.db.delete(entry._id);
+                    deleted++;
+                }
+            }
+        }
+
+        return { upserted, deleted };
     },
 });
 

@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 
 SCRIPTS = [
+    "sync_openclaw_config_to_convex.py",
+    "sync_openclaw_crons_to_convex.py",
     "sync_openclaw_skills_to_convex.py",
     "sync_openclaw_channels_to_convex.py",
     "sync_openclaw_logs_to_convex.py",

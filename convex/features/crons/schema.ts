@@ -3,6 +3,7 @@ import { v } from "convex/values";
 
 export const cronsSchema = {
     cronJobs: defineTable({
+        runtimeJobId: v.optional(v.string()),
         name: v.string(),
         description: v.optional(v.string()),
         agentId: v.optional(v.string()),
@@ -14,6 +15,11 @@ export const cronsSchema = {
         delivery: v.optional(v.string()),  // "announce" | "silent"
         enabled: v.boolean(),
         isolated: v.optional(v.boolean()),
+        deleteAfterRun: v.optional(v.boolean()),
+        sessionTarget: v.optional(v.string()),
+        wakeMode: v.optional(v.string()),
+        failureAlert: v.optional(v.boolean()),
+        source: v.optional(v.string()),
         lastRunAt: v.optional(v.float64()),
         lastRunStatus: v.optional(v.string()),
         nextRunAt: v.optional(v.float64()),
@@ -22,10 +28,12 @@ export const cronsSchema = {
         createdAt: v.float64(),
         updatedAt: v.float64(),
     })
+        .index("by_runtimeJobId", ["runtimeJobId"])
         .index("by_enabled", ["enabled"])
         .index("by_agentId", ["agentId"])
         .index("by_nextRun", ["nextRunAt"])
-        .index("by_tenant", ["tenantId"]),
+        .index("by_tenant", ["tenantId"])
+        .index("by_tenant_runtimeJobId", ["tenantId", "runtimeJobId"]),
 
     cronRuns: defineTable({
         jobId: v.id("cronJobs"),

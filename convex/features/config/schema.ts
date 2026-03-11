@@ -10,6 +10,8 @@ export const configSchema = {
         tags: v.optional(v.array(v.string())),
         valueType: v.optional(v.string()),   // "string" | "boolean" | "number" | "json"
         defaultValue: v.optional(v.string()),
+        source: v.optional(v.string()),
+        runtimePath: v.optional(v.string()),
         tenantId: v.optional(v.string()),
         updatedAt: v.float64(),
     })

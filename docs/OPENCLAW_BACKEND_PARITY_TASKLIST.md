@@ -233,8 +233,18 @@ Definition of done:
 
 ## Config
 
-- [ ] Finalisasi `configEntries` untuk kategori operasional OpenClaw.
-- [ ] Tentukan field mana yang benar-benar mirror runtime config.
+- [x] Finalisasi `configEntries` untuk kategori operasional OpenClaw.
+  Bukti:
+  - schema sekarang menyimpan `source` dan `runtimePath`
+  - bulk mutation `syncRuntimeConfig`
+  - [schema.ts](/home/rahman/projects/manef-db/convex/features/config/schema.ts)
+  - [api.ts](/home/rahman/projects/manef-db/convex/features/config/api.ts)
+  - [sync_openclaw_config_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_config_to_convex.py)
+- [x] Tentukan field mana yang benar-benar mirror runtime config.
+  Bukti:
+  - source runtime disanitasi dari `~/.openclaw/openclaw.json`
+  - entry top-level + path-level disimpan sebagai `configEntries`
+  - field sensitif di-redact sebelum dikirim ke Convex
 - [ ] Tambahkan reload/apply config nyata, atau tandai read-only bila belum
   bisa write-through.
 - [ ] Tambahkan hash/version metadata untuk mencegah overwrite buta.
@@ -247,8 +257,20 @@ Definition of done:
 
 ## Crons
 
-- [ ] Finalisasi `cronJobs` dan `cronRuns`.
-- [ ] Tambahkan sync job runtime -> DB.
+- [x] Finalisasi `cronJobs` dan `cronRuns`.
+  Bukti:
+  - schema `cronJobs` sekarang punya `runtimeJobId` dan `source`
+  - bulk mutation `syncRuntimeJobs`
+  - [schema.ts](/home/rahman/projects/manef-db/convex/features/crons/schema.ts)
+  - [api.ts](/home/rahman/projects/manef-db/convex/features/crons/api.ts)
+- [x] Tambahkan sync job runtime -> DB.
+  Bukti:
+  - source runtime: `~/.openclaw/cron/jobs.json`
+  - sync script:
+    [sync_openclaw_crons_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_crons_to_convex.py)
+  - scheduler:
+    [sync_openclaw_runtime_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_runtime_to_convex.py)
+  - hasil sync nyata: `upserted=1`
 - [ ] Tambahkan mutation untuk enable/disable/edit schedule.
 - [ ] Tambahkan action manual trigger yang benar.
 
@@ -278,16 +300,23 @@ Definition of done:
   - wrapper:
     [sync_openclaw_runtime_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_runtime_to_convex.py)
   - entrypoint per runtime:
+    [sync_openclaw_config_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_config_to_convex.py),
+    [sync_openclaw_crons_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_crons_to_convex.py),
     [sync_openclaw_skills_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_skills_to_convex.py),
     [sync_openclaw_channels_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_channels_to_convex.py),
     [sync_openclaw_logs_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_logs_to_convex.py)
-- [ ] Tentukan mana yang pull-based, mana yang webhook-based, mana yang n8n-based.
+- [x] Tentukan mana yang pull-based, mana yang webhook-based, mana yang n8n-based.
+  Bukti:
+  - runtime sync yang aktif sekarang bersifat `pull-based local VPS -> Convex`
+  - `n8n` tidak wajib untuk mirror `config`, `crons`, `skills`, `channels`, `logs`
+  - `n8n` tetap opsional untuk workflow/write-through tertentu
 - [x] Semua sync job harus punya output status:
   `inserted`, `updated`, `unchanged`, `failed`, `stale`.
   Bukti:
   - current scripts output JSON summary per sync job
   - contoh hasil nyata:
-    `skills upserted=60`, `channels upserted=2 allowListEntries=18`, `logs upserted=200`
+    `config upserted=115`, `crons upserted=1`, `skills upserted=60`,
+    `channels upserted=2 allowListEntries=18`, `logs upserted=200`
 - [ ] Simpan sync audit di tabel khusus bila perlu.
 
 ## Feature smoke tests
@@ -315,9 +344,11 @@ Definition of done:
   - deployment dilakukan setelah commit `3fd3851`
 - [ ] Jalankan mirror agents.
 - [ ] Jalankan mirror sessions.
-- [ ] Jalankan mirror channels.
+- [x] Jalankan mirror channels.
+- [x] Jalankan mirror config.
+- [x] Jalankan mirror crons.
 - [ ] Jalankan mirror nodes.
-- [ ] Jalankan mirror logs.
+- [x] Jalankan mirror logs.
 - [ ] Jalankan mirror skills.
 - [ ] Verifikasi `openclawNavigator:listScopes`.
 - [ ] Verifikasi frontend membaca hasil yang sama tanpa mock.

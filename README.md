@@ -56,6 +56,8 @@ untuk beberapa panel yang dipakai `manef-ui`.
 
 Entry points:
 
+- `npm run sync:runtime:config`
+- `npm run sync:runtime:crons`
 - `npm run sync:runtime:skills`
 - `npm run sync:runtime:channels`
 - `npm run sync:runtime:logs`
@@ -65,6 +67,7 @@ Source runtime yang aktif saat ini:
 
 - `openclaw skills list --json`
 - `~/.openclaw/openclaw.json`
+- `~/.openclaw/cron/jobs.json`
 - `journalctl --user-unit openclaw-gateway -o json`
 
 Scheduler VPS:
@@ -76,10 +79,20 @@ Scheduler VPS:
 
 Status parity saat ini:
 
+- `configEntries`: live sanitized config mirror aktif
+- `cronJobs`: live cron store mirror aktif
 - `skills`: live mirror aktif
 - `channels`: live config/binding mirror aktif
 - `gatewayLogs`: live journal snapshot aktif
-- `nodes`, `config`, `crons`: belum full runtime mirror
+- `nodes`: belum full runtime mirror
+
+Bridge note:
+
+- untuk arsitektur saat ini, jalur yang paling stabil adalah `local VPS sync ->
+  Convex Cloud`
+- `n8n` tidak wajib untuk mirror read path
+- `n8n` baru masuk akal jika nanti dibutuhkan orchestration atau write-through
+  lintas sistem yang lebih kompleks
 
 ## Local development
 
