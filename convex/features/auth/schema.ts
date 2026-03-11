@@ -28,12 +28,18 @@ export const authSchema = {
   authUsers: defineTable({
     email: v.string(),
     name: v.string(),
+    passwordHash: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    profileId: v.optional(v.id("userProfiles")),
     roles: v.array(v.string()),
     sessionVersion: v.number(),
     status: authUserStatus,
     createdAt: v.float64(),
     updatedAt: v.float64(),
-  }).index("by_email", ["email"]),
+  })
+    .index("by_email", ["email"])
+    .index("by_phone", ["phone"])
+    .index("by_profile", ["profileId"]),
 
   authIdentities: defineTable({
     lastLoginAt: v.optional(v.float64()),

@@ -20,17 +20,62 @@ function getAdminConfig() {
   const email = (process.env.AUTH_ADMIN_EMAIL ?? "admin@example.com")
     .trim()
     .toLowerCase();
+  const phone = normalizePhone(process.env.AUTH_ADMIN_PHONE ?? "");
   const password = process.env.AUTH_ADMIN_PASSWORD ?? "changeme";
   const name = process.env.AUTH_ADMIN_NAME ?? email.split("@")[0] ?? "admin";
   const roles = (process.env.AUTH_ADMIN_ROLES ?? "admin")
     .split(",")
     .map((role: string) => role.trim())
     .filter(Boolean);
-  return { email, name, password, roles };
+  return { email, name, password, phone, roles };
 }
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+function normalizePhone(phone: string) {
+  const trimmed = phone.trim();
+  if (!trimmed) {
+    return "";
+  }
+  const hasPlus = trimmed.startsWith("+");
+  const digits = trimmed.replace(/[^\d]/g, "");
+  if (!digits) {
+    return "";
+  }
+  return `${hasPlus ? "+" : ""}${digits}`;
+}
+
+function parseIdentifier(identifier: string) {
+  const normalized = identifier.trim();
+  if (!normalized) {
+    return {
+      email: "",
+      kind: "unknown" as const,
+      phone: "",
+      raw: "",
+    };
+  }
+  if (normalized.includes("@")) {
+    return {
+      email: normalizeEmail(normalized),
+      kind: "email" as const,
+      phone: "",
+      raw: normalized,
+    };
+  }
+  return {
+    email: "",
+    kind: "phone" as const,
+    phone: normalizePhone(normalized),
+    raw: normalized,
+  };
+}
+
+function buildSyntheticEmailFromPhone(phone: string) {
+  const digits = phone.replace(/[^\d]/g, "");
+  return `phone-${digits || "user"}@auth.local`;
 }
 
 function getEmailDomain(email: string) {
@@ -49,6 +94,10 @@ async function hashValue(value: string) {
 
 async function hashSessionToken(token: string) {
   return hashValue(token);
+}
+
+async function hashPassword(password: string) {
+  return hashValue(`password:${password}`);
 }
 
 async function loadPolicy(ctx: any) {
@@ -105,6 +154,39 @@ async function createAuditLog(
   });
 }
 
+export const getAuthProfile = query({
+  args: {
+    userId: v.id("authUsers"),
+  },
+  returns: v.union(
+    v.object({
+      email: v.string(),
+      name: v.string(),
+      phone: v.optional(v.string()),
+      profileId: v.optional(v.id("userProfiles")),
+      roles: v.array(v.string()),
+      status: v.union(v.literal("active"), v.literal("blocked")),
+    }),
+    v.null()
+  ),
+  handler: async (ctx, args) => {
+    const authUser = await ctx.db.get(args.userId);
+
+    if (!authUser) {
+      return null;
+    }
+
+    return {
+      email: authUser.email,
+      name: authUser.name,
+      phone: authUser.phone,
+      profileId: authUser.profileId,
+      roles: authUser.roles,
+      status: authUser.status,
+    };
+  },
+});
+
 export const getAuthProfileByEmail = query({
   args: {
     email: v.string(),
@@ -113,6 +195,8 @@ export const getAuthProfileByEmail = query({
     v.object({
       email: v.string(),
       name: v.string(),
+      phone: v.optional(v.string()),
+      profileId: v.optional(v.id("userProfiles")),
       roles: v.array(v.string()),
       status: v.union(v.literal("active"), v.literal("blocked")),
     }),
@@ -131,6 +215,8 @@ export const getAuthProfileByEmail = query({
     return {
       email: authUser.email,
       name: authUser.name,
+      phone: authUser.phone,
+      profileId: authUser.profileId,
       roles: authUser.roles,
       status: authUser.status,
     };
@@ -141,7 +227,7 @@ export const authorizePasswordLogin = mutation({
   args: {
     createSession: v.optional(v.boolean()),
     deviceHash: v.string(),
-    email: v.string(),
+    identifier: v.string(),
     ip: v.optional(v.string()),
     label: v.optional(v.string()),
     password: v.string(),
@@ -155,46 +241,107 @@ export const authorizePasswordLogin = mutation({
     sessionId: v.optional(v.id("authSessions")),
     sessionVersion: v.optional(v.number()),
     userId: v.optional(v.id("authUsers")),
+    userEmail: v.optional(v.string()),
     userName: v.optional(v.string()),
   }),
   handler: async (ctx, args) => {
     const admin = getAdminConfig();
-    const email = normalizeEmail(args.email);
+    const identifier = parseIdentifier(args.identifier);
+    const loginEmail =
+      identifier.kind === "email"
+        ? identifier.email
+        : identifier.phone
+          ? buildSyntheticEmailFromPhone(identifier.phone)
+          : normalizeEmail(args.identifier);
     const policy = await loadPolicy(ctx);
     const now = Date.now();
     const shouldCreateSession = args.createSession ?? true;
 
-    let authUser = await ctx.db
-      .query("authUsers")
-      .withIndex("by_email", (q) => q.eq("email", email))
-      .first();
+    const profileByEmail =
+      identifier.email
+        ? await ctx.db
+            .query("userProfiles")
+            .withIndex("by_email", (q) => q.eq("email", identifier.email))
+            .first()
+        : null;
+    const profileByPhone =
+      identifier.phone
+        ? await ctx.db
+            .query("userProfiles")
+            .withIndex("by_phone", (q) => q.eq("phone", identifier.phone))
+            .first()
+        : null;
+    const resolvedProfile = profileByEmail ?? profileByPhone ?? null;
+
+    let authUser =
+      (identifier.email
+        ? await ctx.db
+            .query("authUsers")
+            .withIndex("by_email", (q) => q.eq("email", identifier.email))
+            .first()
+        : null) ??
+      (resolvedProfile?.email
+        ? await ctx.db
+            .query("authUsers")
+            .withIndex("by_email", (q) => q.eq("email", normalizeEmail(resolvedProfile.email!)))
+            .first()
+        : null) ??
+      (identifier.phone
+        ? await ctx.db
+            .query("authUsers")
+            .withIndex("by_phone", (q) => q.eq("phone", identifier.phone))
+            .first()
+        : null) ??
+      (resolvedProfile
+        ? await ctx.db
+            .query("authUsers")
+            .withIndex("by_profile", (q) => q.eq("profileId", resolvedProfile._id))
+            .first()
+        : null);
+
+    const isAdminIdentifier =
+      identifier.email === admin.email ||
+      (identifier.phone &&
+        (
+          (admin.phone && identifier.phone === admin.phone) ||
+          resolvedProfile?.email === admin.email ||
+          authUser?.email === admin.email
+        ));
 
     await createAuditLog(ctx, {
       event: "LOGIN_ATTEMPT",
       meta: {
         deviceHash: args.deviceHash,
-        email,
+        identifier: identifier.raw,
+        email: identifier.email || authUser?.email || loginEmail,
+        phone: identifier.phone || resolvedProfile?.phone,
         ip: args.ip,
       },
       userId: authUser?._id,
     });
 
     if (
+      identifier.email &&
       policy.allowedEmailDomains.length > 0 &&
-      !policy.allowedEmailDomains.includes(getEmailDomain(email))
+      !policy.allowedEmailDomains.includes(getEmailDomain(identifier.email))
     ) {
       await createAuditLog(ctx, {
         event: "LOGIN_DENIED",
-        meta: { email, reason: "EMAIL_DOMAIN_NOT_ALLOWED" },
+        meta: { identifier: identifier.raw, reason: "EMAIL_DOMAIN_NOT_ALLOWED" },
         userId: authUser?._id,
       });
       return { code: "EMAIL_DOMAIN_NOT_ALLOWED" as const };
     }
 
-    if (email !== admin.email || args.password !== admin.password) {
+    const suppliedPasswordHash = await hashPassword(args.password);
+    const storedPasswordMatches =
+      !!authUser?.passwordHash && authUser.passwordHash === suppliedPasswordHash;
+    const adminPasswordMatches = isAdminIdentifier && args.password === admin.password;
+
+    if (!storedPasswordMatches && !adminPasswordMatches) {
       await createAuditLog(ctx, {
         event: "LOGIN_DENIED",
-        meta: { email, reason: "INVALID_CREDENTIALS" },
+        meta: { identifier: identifier.raw, reason: "INVALID_CREDENTIALS" },
         userId: authUser?._id,
       });
       return { code: "INVALID_CREDENTIALS" as const };
@@ -203,8 +350,11 @@ export const authorizePasswordLogin = mutation({
     if (!authUser) {
       const userId = await ctx.db.insert("authUsers", {
         createdAt: now,
-        email,
+        email: identifier.email || resolvedProfile?.email || admin.email || loginEmail,
         name: admin.name,
+        passwordHash: suppliedPasswordHash,
+        phone: identifier.phone || resolvedProfile?.phone || admin.phone || undefined,
+        profileId: resolvedProfile?._id,
         roles: admin.roles,
         sessionVersion: 1,
         status: "active",
@@ -213,8 +363,12 @@ export const authorizePasswordLogin = mutation({
       authUser = await ctx.db.get(userId);
     } else {
       await ctx.db.patch(authUser._id, {
-        name: admin.name,
-        roles: admin.roles,
+        email: authUser.email || resolvedProfile?.email || loginEmail,
+        name: isAdminIdentifier ? admin.name : authUser.name,
+        passwordHash: adminPasswordMatches ? suppliedPasswordHash : authUser.passwordHash,
+        phone: authUser.phone ?? identifier.phone ?? resolvedProfile?.phone,
+        profileId: authUser.profileId ?? resolvedProfile?._id,
+        roles: isAdminIdentifier ? admin.roles : authUser.roles,
         updatedAt: now,
       });
       authUser = await ctx.db.get(authUser._id);
@@ -227,7 +381,7 @@ export const authorizePasswordLogin = mutation({
     if (authUser.status === "blocked") {
       await createAuditLog(ctx, {
         event: "LOGIN_DENIED",
-        meta: { email, reason: "BLOCKED" },
+        meta: { identifier: identifier.raw, reason: "BLOCKED" },
         userId: authUser._id,
       });
       return { code: "BLOCKED" as const, userId: authUser._id };
@@ -236,7 +390,7 @@ export const authorizePasswordLogin = mutation({
     const existingIdentity = await ctx.db
       .query("authIdentities")
       .withIndex("by_provider_account", (q) =>
-        q.eq("provider", "credentials").eq("providerAccountId", email)
+        q.eq("provider", "credentials").eq("providerAccountId", identifier.raw)
       )
       .first();
     if (existingIdentity) {
@@ -245,7 +399,7 @@ export const authorizePasswordLogin = mutation({
       await ctx.db.insert("authIdentities", {
         lastLoginAt: now,
         provider: "credentials",
-        providerAccountId: email,
+        providerAccountId: identifier.raw,
         userId: authUser._id,
       });
     }
@@ -265,7 +419,7 @@ export const authorizePasswordLogin = mutation({
       .first();
 
     const shouldBootstrapApprove =
-      email === admin.email &&
+      authUser.email === admin.email &&
       hasApprovedDevice === null &&
       policy.allowBootstrapAutoApprove &&
       !policy.bootstrapCompletedAt;
@@ -305,7 +459,8 @@ export const authorizePasswordLogin = mutation({
               : "DEVICE_PENDING",
         meta: {
           deviceId,
-          email,
+          email: authUser.email,
+          identifier: identifier.raw,
           reason: status === "approved" ? "BOOTSTRAP" : "NEW_DEVICE",
         },
         userId: authUser._id,
@@ -327,7 +482,12 @@ export const authorizePasswordLogin = mutation({
     if (device.status === "revoked") {
       await createAuditLog(ctx, {
         event: "LOGIN_DENIED",
-        meta: { deviceId: device._id, email, reason: "DEVICE_REVOKED" },
+        meta: {
+          deviceId: device._id,
+          email: authUser.email,
+          identifier: identifier.raw,
+          reason: "DEVICE_REVOKED",
+        },
         userId: authUser._id,
       });
       return {
@@ -381,7 +541,12 @@ export const authorizePasswordLogin = mutation({
 
       await createAuditLog(ctx, {
         event: "LOGIN_SUCCESS",
-        meta: { deviceId: device._id, email, sessionId },
+        meta: {
+          deviceId: device._id,
+          email: authUser.email,
+          identifier: identifier.raw,
+          sessionId,
+        },
         userId: authUser._id,
       });
     }
@@ -393,9 +558,56 @@ export const authorizePasswordLogin = mutation({
       roles: authUser.roles,
       sessionId,
       sessionVersion: authUser.sessionVersion,
+      userEmail: authUser.email,
       userId: authUser._id,
       userName: authUser.name,
     };
+  },
+});
+
+export const backfillAuthUserProfiles = mutation({
+  args: {},
+  returns: v.object({
+    linked: v.number(),
+    updated: v.number(),
+  }),
+  handler: async (ctx) => {
+    const users = await ctx.db.query("authUsers").collect();
+    let linked = 0;
+    let updated = 0;
+
+    for (const authUser of users) {
+      const profile =
+        (authUser.profileId ? await ctx.db.get(authUser.profileId) : null) ??
+        (authUser.email
+          ? await ctx.db
+              .query("userProfiles")
+              .withIndex("by_email", (q) => q.eq("email", authUser.email))
+              .first()
+          : null) ??
+        (authUser.phone
+          ? await ctx.db
+              .query("userProfiles")
+              .withIndex("by_phone", (q) => q.eq("phone", authUser.phone!))
+              .first()
+          : null);
+
+      if (!profile) {
+        continue;
+      }
+
+      await ctx.db.patch(authUser._id, {
+        phone: authUser.phone ?? profile.phone,
+        profileId: profile._id,
+        updatedAt: Date.now(),
+      });
+      updated += 1;
+      if (!authUser.profileId) {
+        linked += 1;
+      }
+    }
+
+    return { linked, updated };
   },
 });
 

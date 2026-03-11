@@ -270,6 +270,15 @@ async function ensureAuthUser(ctx: any, now: number) {
   if (existing) {
     await ctx.db.patch(existing._id, {
       name: OWNER_NAME,
+      phone: OWNER_PHONE,
+      profileId:
+        existing.profileId ??
+        (
+          await ctx.db
+            .query("userProfiles")
+            .withIndex("by_email", (q: any) => q.eq("email", OWNER_EMAIL))
+            .first()
+        )?._id,
       roles: ["admin"],
       status: "active",
       updatedAt: now,
@@ -280,6 +289,7 @@ async function ensureAuthUser(ctx: any, now: number) {
     createdAt: now,
     email: OWNER_EMAIL,
     name: OWNER_NAME,
+    phone: OWNER_PHONE,
     roles: ["admin"],
     sessionVersion: 1,
     status: "active",

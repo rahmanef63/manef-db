@@ -92,12 +92,20 @@ export const listScopes = query({
       (role) => role.trim().toLowerCase() === "admin",
     );
 
-    const visibleProfiles = isAdmin
+    const visibleProfiles = (isAdmin
       ? await ctx.db.query("userProfiles").collect()
-      : await ctx.db
-          .query("userProfiles")
-          .withIndex("by_email", (q) => q.eq("email", viewerEmail))
-          .collect();
+      : authUser?.profileId
+        ? (
+            await Promise.all([ctx.db.get(authUser.profileId)])
+          ).filter(
+            (
+              profile,
+            ): profile is NonNullable<typeof profile> => profile !== null,
+          )
+        : await ctx.db
+            .query("userProfiles")
+            .withIndex("by_email", (q) => q.eq("email", viewerEmail))
+            .collect()) as Array<{ _id: any; email?: string; name?: string; phone?: string }>;
 
     const visibleOwnerIds = new Set(
       visibleProfiles.map((profile) => profile._id),
