@@ -5,12 +5,19 @@ Convex backend repo for Manef.
 ## Current status
 
 - [Deployment status 2026-03-11](./DEPLOYMENT_STATUS_2026-03-11.md)
+- [Docs index](./docs/README.md)
+- [OpenClaw backend parity tasklist](./docs/OPENCLAW_BACKEND_PARITY_TASKLIST.md)
 
 ## Responsibilities
 
 - Owns `convex/` schema, queries, mutations, actions, and generated API types.
 - Exports `@manef/db/api` for typed function references in `manef-ui`.
 - Exports `@manef/db/dataModel` for shared Convex types like `Id`.
+
+OpenClaw parity rule:
+
+- sebuah feature backend baru dianggap selesai hanya jika CRUD Convex tersedia
+  dan state-nya termirror dengan data runtime OpenClaw
 
 ## OpenClaw workspace model
 
