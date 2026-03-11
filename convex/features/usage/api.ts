@@ -9,6 +9,7 @@ export const getUsage = query({
         startDate: v.optional(v.string()),
         endDate: v.optional(v.string()),
         agentId: v.optional(v.string()),
+        agentIds: v.optional(v.array(v.string())),
         limit: v.optional(v.number()),
     },
     returns: v.array(
@@ -33,12 +34,14 @@ export const getUsage = query({
             .query("usageRecords")
             .order("desc")
             .take(takeCount);
+        const allowedAgentIds = args.agentIds ? new Set(args.agentIds) : null;
 
         return records
             .filter((r) => {
                 if (args.startDate && r.date < args.startDate) return false;
                 if (args.endDate && r.date > args.endDate) return false;
                 if (args.agentId && r.agentId !== args.agentId) return false;
+                if (allowedAgentIds && (!r.agentId || !allowedAgentIds.has(r.agentId))) return false;
                 return true;
             })
             .map((r) => ({
@@ -63,6 +66,7 @@ export const getUsage = query({
  */
 export const getDailySummary = query({
     args: {
+        agentIds: v.optional(v.array(v.string())),
         startDate: v.optional(v.string()),
         endDate: v.optional(v.string()),
     },
@@ -80,6 +84,7 @@ export const getDailySummary = query({
             .query("usageRecords")
             .order("desc")
             .take(1000);
+        const allowedAgentIds = args.agentIds ? new Set(args.agentIds) : null;
 
         const dailyMap: Record<
             string,
@@ -89,6 +94,7 @@ export const getDailySummary = query({
         for (const r of records) {
             if (args.startDate && r.date < args.startDate) continue;
             if (args.endDate && r.date > args.endDate) continue;
+            if (allowedAgentIds && (!r.agentId || !allowedAgentIds.has(r.agentId))) continue;
 
             if (!dailyMap[r.date]) {
                 dailyMap[r.date] = { tokens: 0, cost: 0, sessions: 0, errors: 0 };
@@ -142,7 +148,11 @@ export const recordUsage = mutation({
  * Export usage data.
  */
 export const exportUsage = action({
-    args: { startDate: v.optional(v.string()), endDate: v.optional(v.string()) },
+    args: {
+        agentIds: v.optional(v.array(v.string())),
+        startDate: v.optional(v.string()),
+        endDate: v.optional(v.string())
+    },
     returns: v.null(),
     handler: async (ctx, args) => {
         console.log(`Exporting usage data: ${args.startDate} to ${args.endDate}`);

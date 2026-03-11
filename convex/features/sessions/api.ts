@@ -6,10 +6,16 @@ import { api } from "../../_generated/api";
  * Returns latest active sessions.
  */
 export const getSessions = query({
-    args: { limit: v.optional(v.number()) },
+    args: {
+        agentId: v.optional(v.string()),
+        agentIds: v.optional(v.array(v.string())),
+        limit: v.optional(v.number())
+    },
     returns: v.array(
         v.object({
             _id: v.id("sessions"),
+            agentId: v.optional(v.string()),
+            channel: v.optional(v.string()),
             sessionKey: v.string(),
             status: v.string(),
             messageCount: v.number(),
@@ -19,13 +25,21 @@ export const getSessions = query({
     handler: async (ctx, args) => {
         const takeCount = args.limit ?? 50;
         const sessions = await ctx.db.query("sessions").order("desc").take(takeCount);
+        const allowedAgentIds = args.agentIds ? new Set(args.agentIds) : null;
         return sessions.map((s) => ({
             _id: s._id,
+            agentId: s.agentId,
+            channel: s.channel,
             sessionKey: s.sessionKey,
             status: s.status || "active",
             messageCount: s.messageCount || 0,
             lastActiveAt: s.lastActiveAt,
-        }));
+        })).filter((session) => {
+            if (args.agentId && session.agentId !== args.agentId) return false;
+            if (allowedAgentIds && session.agentId && !allowedAgentIds.has(session.agentId)) return false;
+            if (allowedAgentIds && !session.agentId) return false;
+            return true;
+        });
     },
 });
 
