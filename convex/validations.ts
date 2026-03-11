@@ -11,6 +11,7 @@ export const checkSystemHealth = query({
       .query("workspaceTrees")
       .withIndex("by_type", (q) => q.eq("type", "agent"))
       .collect();
+    const workspaceAgentLinks = await ctx.db.query("workspaceAgents").collect();
 
     const agentsByOwner = new Map<string, (typeof agents)[number][]>();
     for (const agent of agents) {
@@ -22,11 +23,12 @@ export const checkSystemHealth = query({
       agentsByOwner.set(agent.owner, ownerAgents);
     }
 
-    const agentIdsWithWorkspace = new Set(
+    const agentIdsWithWorkspace = new Set([
+      ...workspaceAgentLinks.map((link) => link.agentId),
       agentWorkspaces
         .map((workspace) => workspace.agentId)
         .filter((agentId): agentId is string => Boolean(agentId))
-    );
+    ]);
 
     const anomalousUserIds = new Map<string, string>();
     let totalUsersWithoutDedicatedAgent = 0;

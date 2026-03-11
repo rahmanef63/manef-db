@@ -99,6 +99,16 @@ export const createSubAgent = mutation({
       type: "agent",
       updatedAt: now,
     });
+    await ctx.db.insert("workspaceAgents", {
+      agentId: subAgentId,
+      createdAt: now,
+      inheritToChildren: true,
+      isPrimary: true,
+      relation: "primary",
+      source: "manual",
+      updatedAt: now,
+      workspaceId: agentWorkspaceId,
+    });
 
     return {
       subAgentDocId,

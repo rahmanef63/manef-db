@@ -109,6 +109,18 @@ export const listScopes = query({
       )
     ).flat();
 
+    const workspaceAgentLinks = await ctx.db.query("workspaceAgents").collect();
+    const agentLinksByWorkspace = new Map<
+      string,
+      Array<(typeof workspaceAgentLinks)[number]>
+    >();
+    for (const link of workspaceAgentLinks) {
+      const key = link.workspaceId as string;
+      const next = agentLinksByWorkspace.get(key) ?? [];
+      next.push(link);
+      agentLinksByWorkspace.set(key, next);
+    }
+
     const treesById = new Map(workspaceTrees.map((tree) => [tree._id, tree]));
     const childrenByParent = new Map<
       string,
@@ -138,6 +150,35 @@ export const listScopes = query({
       ]);
     };
 
+    const directAgentIdsForTree = (
+      tree: (typeof workspaceTrees)[number],
+    ): string[] => {
+      const linked = agentLinksByWorkspace.get(tree._id as string) ?? [];
+      const preferred = linked
+        .slice()
+        .sort((left, right) => {
+          const leftWeight = left.isPrimary ? 0 : 1;
+          const rightWeight = right.isPrimary ? 0 : 1;
+          return leftWeight - rightWeight;
+        })
+        .map((link) => link.agentId);
+      if (preferred.length > 0) {
+        return Array.from(new Set(preferred));
+      }
+      return tree.agentId ? [tree.agentId] : [];
+    };
+
+    const primaryAgentIdForTree = (
+      tree: (typeof workspaceTrees)[number],
+    ): string | undefined => {
+      const linked = agentLinksByWorkspace.get(tree._id as string) ?? [];
+      const primary =
+        linked.find((link) => link.isPrimary) ??
+        linked.find((link) => link.relation === "primary") ??
+        linked[0];
+      return primary?.agentId ?? tree.agentId;
+    };
+
     const roots = workspaceTrees
       .filter((tree) => {
         if (!tree.parentId) {
@@ -160,21 +201,25 @@ export const listScopes = query({
       .map((root) => {
         const profile = root.ownerId ? profilesById.get(root.ownerId) : null;
         const descendants = collectDescendants(root._id);
-        const rootAgentIds = [root.agentId, ...descendants.map((tree) => tree.agentId)]
-          .filter((value): value is string => Boolean(value));
+        const rootAgentIds = [
+          ...directAgentIdsForTree(root),
+          ...descendants.flatMap((tree) => directAgentIdsForTree(tree)),
+        ];
 
         const children = descendants.map((child) => {
           const childProfile = child.ownerId
             ? profilesById.get(child.ownerId)
             : profile;
           const childDescendantAgentIds = [
-            child.agentId,
-            ...collectDescendants(child._id).map((tree) => tree.agentId),
-          ].filter((value): value is string => Boolean(value));
+            ...directAgentIdsForTree(child),
+            ...collectDescendants(child._id).flatMap((tree) =>
+              directAgentIdsForTree(tree),
+            ),
+          ];
 
           return {
             _id: child._id,
-            agentId: child.agentId,
+            agentId: primaryAgentIdForTree(child),
             agentIds: Array.from(new Set(childDescendantAgentIds)),
             name:
               child.type === "user"
@@ -196,7 +241,7 @@ export const listScopes = query({
 
         return {
           _id: root._id,
-          agentId: root.agentId,
+          agentId: primaryAgentIdForTree(root),
           agentIds: Array.from(new Set(rootAgentIds)),
           childCount: children.length,
           children,

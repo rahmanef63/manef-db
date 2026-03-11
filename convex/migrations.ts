@@ -77,6 +77,16 @@ export const fixUsersWithoutAgents = internalMutation({
         type: "agent",
         updatedAt: now,
       });
+      await ctx.db.insert("workspaceAgents", {
+        agentId,
+        createdAt: now,
+        inheritToChildren: true,
+        isPrimary: true,
+        relation: "primary",
+        source: "migration",
+        updatedAt: now,
+        workspaceId: agentWorkspaceId,
+      });
 
       createdAgentIds.push(agentId);
       createdWorkspaceIds.push(agentWorkspaceId);

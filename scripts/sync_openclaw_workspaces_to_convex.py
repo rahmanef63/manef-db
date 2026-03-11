@@ -87,6 +87,7 @@ def main() -> int:
     files_payload: list[dict[str, Any]] = []
     trees_payload: list[dict[str, Any]] = []
     agent_payload: list[dict[str, Any]] = []
+    bindings_payload: list[dict[str, Any]] = []
 
     for agent in agents:
         agent_id = str(agent.get("id") or "").strip()
@@ -115,6 +116,16 @@ def main() -> int:
                 "type": "agent",
             }
         )
+        bindings_payload.append(
+            {
+                "agentId": agent_id,
+                "inheritToChildren": True,
+                "isPrimary": True,
+                "relation": "primary",
+                "runtimePath": str(workspace_path),
+                "source": "openclaw-runtime",
+            }
+        )
 
         agent_entry: dict[str, Any] = {
             "agentId": agent_id,
@@ -140,7 +151,7 @@ def main() -> int:
 
     workspace_result = run_convex(
         "features/workspace/api:syncRuntimeWorkspaceSnapshot",
-        {"files": files_payload, "trees": trees_payload},
+        {"bindings": bindings_payload, "files": files_payload, "trees": trees_payload},
     )
     agents_result = run_convex(
         "features/agents/api:syncRuntimeAgents",

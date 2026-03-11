@@ -26,9 +26,9 @@ Repo ini sekarang punya dua lapisan model workspace yang perlu dibedakan:
 - `workspaces` + `members` + `messages`
   Dipakai oleh layer legacy/ent untuk auth workspace, invites, members, dan
   message board sederhana.
-- `userProfiles` + `workspaceTrees` + `agents` + `agentDelegations`
-  Dipakai oleh dashboard OpenClaw untuk contact workspace, agent workspace, dan
-  sub-agent hierarchy.
+- `userProfiles` + `workspaceTrees` + `workspaceAgents` + `agents` + `agentDelegations`
+  Dipakai oleh dashboard OpenClaw untuk contact workspace, agent workspace,
+  multi-agent workspace, dan sub-agent hierarchy.
 
 Query utama untuk header navigator OpenClaw ada di:
 
@@ -41,6 +41,9 @@ Contract-nya:
 - setiap root mengembalikan seluruh child/sub-workspace agent di bawahnya
 - setiap node mengembalikan `agentIds` turunan agar frontend bisa memfilter
   halaman seperti `Agents`, `Sessions`, dan `Usage`
+- satu workspace boleh memiliki banyak agent lewat tabel `workspaceAgents`
+- `workspaceTrees.agentId` dipertahankan sebagai primary/default agent untuk
+  kompatibilitas lama, bukan lagi satu-satunya relasi workspace -> agent
 
 Penting:
 
@@ -104,6 +107,7 @@ Workspace runtime note:
 - dokumen inti workspace agent dimirror ke:
   - tabel `workspaceFiles`
   - subset field agent seperti `soulMd`, `identityMd`, `toolsMd`, `userMd`
+- default binding workspace -> agent dimirror ke tabel `workspaceAgents`
 - canonical file yang dimirror:
   `AGENTS.md`, `SOUL.md`, `USER.md`, `TOOLS.md`, `MEMORY.md`,
   `HEARTBEAT.md`, `IDENTITY.md`, `BOOTSTRAP.md`

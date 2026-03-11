@@ -33,7 +33,8 @@ Task belum selesai bila:
 
 ## Navigator model
 
-- [ ] Pertahankan `userProfiles + workspaceTrees + agents` sebagai navigator
+- [x] Pertahankan `userProfiles + workspaceTrees + workspaceAgents + agents`
+  sebagai navigator
   business-facing.
 - [ ] Jelaskan mapping resmi antara:
   `contact/user`, `root workspace`, `agent`, `sub-agent`, `channel binding`.
@@ -57,6 +58,49 @@ Definition of done:
 - admin melihat semua root milik semua user
 - non-admin hanya melihat scope miliknya
 - setiap node membawa `agentIds` turunan untuk filter frontend
+
+## Workspace <-> agents
+
+- [x] Tambahkan relasi many-to-many `workspaceAgents`.
+  Bukti:
+  - schema baru:
+    [workspace/schema.ts](/home/rahman/projects/manef-db/convex/features/workspace/schema.ts)
+  - field:
+    `workspaceId`, `agentId`, `relation`, `isPrimary`, `inheritToChildren`,
+    `source`
+  - index:
+    `by_workspace`, `by_agent`, `by_workspace_agent`
+- [x] Jadikan `workspaceTrees.agentId` hanya sebagai primary/default agent
+  compatibility field.
+  Bukti:
+  - navigator sekarang menghitung `agentIds` dari `workspaceAgents` terlebih dulu
+  - fallback ke `workspaceTrees.agentId` hanya bila relation row belum ada
+  - [openclawNavigator.ts](/home/rahman/projects/manef-db/convex/openclawNavigator.ts)
+- [x] Setiap agent runtime punya default workspace binding.
+  Bukti:
+  - runtime workspace sync menulis `bindingsUpserted=16`
+  - source:
+    [sync_openclaw_workspaces_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_workspaces_to_convex.py)
+  - bulk mutation:
+    [workspace/api.ts](/home/rahman/projects/manef-db/convex/features/workspace/api.ts)
+- [x] Onboarding/manual create juga membuat binding workspace-agent.
+  Bukti:
+  - [onboarding.ts](/home/rahman/projects/manef-db/convex/onboarding.ts)
+  - [migrations.ts](/home/rahman/projects/manef-db/convex/migrations.ts)
+  - [agentOps.ts](/home/rahman/projects/manef-db/convex/agentOps.ts)
+- [x] Tambahkan API attach/detach agent ke workspace.
+  Bukti:
+  - `attachWorkspaceAgent`
+  - `detachWorkspaceAgent`
+  - `listWorkspaceAgents`
+  - [workspace/api.ts](/home/rahman/projects/manef-db/convex/features/workspace/api.ts)
+
+Definition of done:
+
+- satu workspace bisa punya multiple agents
+- setiap agent punya primary workspace default
+- child workspace bisa punya agent sendiri tanpa kehilangan parent tree
+- frontend bisa tetap memakai `selectedScope.agentIds`
 
 ## Agents
 

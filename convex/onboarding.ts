@@ -166,6 +166,16 @@ export const initializeNewUser = mutation({
         type: "agent",
         updatedAt: now,
       });
+      await ctx.db.insert("workspaceAgents", {
+        agentId: dedicatedAgent.agentId,
+        createdAt: now,
+        inheritToChildren: true,
+        isPrimary: true,
+        relation: "primary",
+        source: "onboarding",
+        updatedAt: now,
+        workspaceId: agentWorkspaceId,
+      });
       agentWorkspace = await ctx.db.get(agentWorkspaceId);
       createdAgentWorkspace = true;
     }

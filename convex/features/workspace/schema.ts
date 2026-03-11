@@ -63,4 +63,19 @@ export const workspaceSchema = {
         .index("by_rootPath", ["rootPath"])
         .index("by_runtimePath", ["runtimePath"])
         .index("by_type", ["type"]),
+    workspaceAgents: defineTable({
+        agentId: v.string(),
+        createdAt: v.float64(),
+        inheritToChildren: v.optional(v.boolean()),
+        isPrimary: v.optional(v.boolean()),
+        relation: v.string(),
+        source: v.optional(v.string()),
+        tenantId: v.optional(v.string()),
+        updatedAt: v.float64(),
+        workspaceId: v.id("workspaceTrees"),
+    })
+        .index("by_agent", ["agentId"])
+        .index("by_workspace", ["workspaceId"])
+        .index("by_workspace_agent", ["workspaceId", "agentId"])
+        .index("by_tenant", ["tenantId"]),
 };
