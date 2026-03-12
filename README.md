@@ -173,6 +173,10 @@ Progress terbaru:
 - `workspaceTrees` sekarang juga menyimpan `featureKeys`:
   - daftar feature yang terpasang pada workspace tersebut
   - ikut dikembalikan oleh `openclawNavigator`
+- RBAC store sekarang lebih ketat:
+  - install/uninstall feature dibatasi oleh akses workspace + role admin
+  - grant/revoke skill workspace dibatasi oleh akses workspace + role admin
+  - draft builder workspace dibatasi oleh akses workspace + role admin
 - install feature sekarang juga menurunkan policy capability:
   - `workspaceSkillPolicies`
   - `workspaceAgentSkillPolicies`

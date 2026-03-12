@@ -40,6 +40,6 @@ Progress terbaru yang sudah hidup:
 
 Remaining phase terdekat:
 
-1. Hardening RBAC install/uninstall `Feature Store`.
-2. `Agent Builder` backend contract.
+1. Hardening policy nyata `workspace -> agents -> skills` untuk source `skill_store`.
+2. `Agent Builder` backend contract dan capability output.
 3. Publish/downstream adapter ke `Superspace`.

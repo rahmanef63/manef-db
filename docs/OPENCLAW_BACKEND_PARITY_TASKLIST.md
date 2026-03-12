@@ -192,7 +192,18 @@ Progress terbaru untuk `Feature Store`:
   `overview`, `chat-session`, `inbox`, `agents`, `channels`, `sessions`,
   `usage`, `crons`, `skills`, `nodes`, `config`, `debug`, `logs`,
   `users`, `roles`, `audit`, `feature-store`
-- [ ] RBAC backend untuk install/uninstall masih perlu diperketat
+- [x] RBAC backend untuk install/uninstall dan draft builder sudah diperketat
+  berdasarkan akses workspace + role admin.
+  Bukti:
+  - guard `requireViewerContext` dan `assertWorkspaceAccess` di
+    [api.ts](/home/rahman/projects/manef-db/convex/features/featureStore/api.ts)
+  - guard `requireViewerContext` dan `assertWorkspaceAccess` di
+    [api.ts](/home/rahman/projects/manef-db/convex/features/skills/api.ts)
+  - `seedFeatureStoreCatalog`, `installFeatureStoreItem`,
+    `uninstallFeatureStoreItem`, `createAgentBuilderDraft`,
+    `updateAgentBuilderDraft`, `archiveAgentBuilderDraft`,
+    `setWorkspaceSkillPolicy` sekarang menolak caller non-admin
+    untuk workspace target.
 - [x] Install feature sekarang otomatis menghasilkan policy skill
   agent/workspace.
 - [ ] Publish/write-through ke downstream `Superspace` belum ada

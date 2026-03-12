@@ -1,6 +1,10 @@
 import { query, mutation, action } from "../../_generated/server";
 import { v } from "convex/values";
 
+function normalizeEmail(email: string | null | undefined) {
+    return email?.trim().toLowerCase() ?? "";
+}
+
 function sortedUnique(values: string[]) {
     return Array.from(new Set(values.filter(Boolean))).sort((left, right) =>
         left.localeCompare(right, "en"),
@@ -20,6 +24,47 @@ async function getWorkspaceAgentIds(ctx: any, workspaceId: any) {
         ...links.map((link: any) => link.agentId),
         ...(workspace.agentId ? [workspace.agentId] : []),
     ]);
+}
+
+async function requireViewerContext(ctx: any) {
+    const identity = await ctx.auth.getUserIdentity();
+    const viewerEmail = normalizeEmail(identity?.email);
+    if (!viewerEmail) {
+        throw new Error("Authentication required");
+    }
+    const authUser = await ctx.db
+        .query("authUsers")
+        .withIndex("by_email", (q: any) => q.eq("email", viewerEmail))
+        .first();
+    if (!authUser) {
+        throw new Error("Viewer auth user not found");
+    }
+    const isAdmin = (authUser.roles ?? []).some(
+        (role: string) => role.trim().toLowerCase() === "admin",
+    );
+    return { authUser, isAdmin };
+}
+
+async function assertWorkspaceAccess(
+    ctx: any,
+    workspaceId: any,
+    options?: { adminOnly?: boolean },
+) {
+    const viewer = await requireViewerContext(ctx);
+    const workspace = await ctx.db.get(workspaceId);
+    if (!workspace) {
+        throw new Error("Workspace not found");
+    }
+    if (viewer.isAdmin) {
+        return { ...viewer, workspace };
+    }
+    if (options?.adminOnly) {
+        throw new Error("Admin access required");
+    }
+    if (!viewer.authUser.profileId || workspace.ownerId !== viewer.authUser.profileId) {
+        throw new Error("Workspace access denied");
+    }
+    return { ...viewer, workspace };
 }
 
 /**
@@ -58,6 +103,11 @@ export const listSkills = query({
         })
     ),
     handler: async (ctx, args) => {
+        if (args.workspaceId) {
+            await assertWorkspaceAccess(ctx, args.workspaceId);
+        } else {
+            await requireViewerContext(ctx);
+        }
         let skills;
         if (args.source) {
             skills = await ctx.db
@@ -152,6 +202,10 @@ export const toggleSkill = mutation({
     args: { id: v.id("skills"), enabled: v.boolean() },
     returns: v.null(),
     handler: async (ctx, args) => {
+        const { isAdmin } = await requireViewerContext(ctx);
+        if (!isAdmin) {
+            throw new Error("Admin access required");
+        }
         const existing = await ctx.db.get(args.id);
         if (!existing) {
             return null;
@@ -179,6 +233,7 @@ export const setWorkspaceSkillPolicy = mutation({
     },
     returns: v.null(),
     handler: async (ctx, args) => {
+        await assertWorkspaceAccess(ctx, args.workspaceId, { adminOnly: true });
         const skill = await ctx.db.get(args.skillId);
         if (!skill) {
             return null;
@@ -407,6 +462,7 @@ export const getSkillStoreStatus = query({
         hasBundledItems: v.boolean(),
     }),
     handler: async (ctx) => {
+        await requireViewerContext(ctx);
         const skills = await ctx.db.query("skills").take(500);
         const counts = new Map<string, number>();
         for (const skill of skills) {

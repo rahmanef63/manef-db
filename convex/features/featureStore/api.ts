@@ -2,6 +2,10 @@ import { mutation, query } from "../../_generated/server";
 import { v } from "convex/values";
 import { FEATURE_STORE_SEED } from "./catalog";
 
+function normalizeEmail(email: string | null | undefined) {
+    return email?.trim().toLowerCase() ?? "";
+}
+
 function sortedUnique(values: string[]) {
     return Array.from(new Set(values.filter(Boolean))).sort((left, right) =>
         left.localeCompare(right, "en"),
@@ -22,6 +26,47 @@ async function getFeatureStoreItemMap(ctx: any, itemKeys: string[]) {
             .filter((row): row is NonNullable<typeof row> => row != null)
             .map((row) => [row.itemKey, row]),
     );
+}
+
+async function requireViewerContext(ctx: any) {
+    const identity = await ctx.auth.getUserIdentity();
+    const viewerEmail = normalizeEmail(identity?.email);
+    if (!viewerEmail) {
+        throw new Error("Authentication required");
+    }
+    const authUser = await ctx.db
+        .query("authUsers")
+        .withIndex("by_email", (q: any) => q.eq("email", viewerEmail))
+        .first();
+    if (!authUser) {
+        throw new Error("Viewer auth user not found");
+    }
+    const isAdmin = (authUser.roles ?? []).some(
+        (role: string) => role.trim().toLowerCase() === "admin",
+    );
+    return { authUser, isAdmin };
+}
+
+async function assertWorkspaceAccess(
+    ctx: any,
+    workspaceId: any,
+    options?: { adminOnly?: boolean },
+) {
+    const viewer = await requireViewerContext(ctx);
+    const workspace = await ctx.db.get(workspaceId);
+    if (!workspace) {
+        throw new Error("Workspace not found");
+    }
+    if (viewer.isAdmin) {
+        return { ...viewer, workspace };
+    }
+    if (options?.adminOnly) {
+        throw new Error("Admin access required");
+    }
+    if (!viewer.authUser.profileId || workspace.ownerId !== viewer.authUser.profileId) {
+        throw new Error("Workspace access denied");
+    }
+    return { ...viewer, workspace };
 }
 
 async function syncWorkspaceCapabilityPolicies(
@@ -166,6 +211,11 @@ export const seedFeatureStoreCatalog = mutation({
         previewsUpserted: v.number(),
     }),
     handler: async (ctx) => {
+        await requireViewerContext(ctx).then(({ isAdmin }) => {
+            if (!isAdmin) {
+                throw new Error("Admin access required");
+            }
+        });
         const now = Date.now();
         let itemsUpserted = 0;
         let previewsUpserted = 0;
@@ -278,6 +328,11 @@ export const listFeatureStoreItems = query({
         }),
     ),
     handler: async (ctx, args) => {
+        if (args.workspaceId) {
+            await assertWorkspaceAccess(ctx, args.workspaceId);
+        } else {
+            await requireViewerContext(ctx);
+        }
         let items = await ctx.db.query("featureStoreItems").collect();
         const installs = args.workspaceId
             ? await ctx.db
@@ -356,6 +411,7 @@ export const installFeatureStoreItem = mutation({
     },
     returns: v.id("workspaceFeatureInstalls"),
     handler: async (ctx, args) => {
+        await assertWorkspaceAccess(ctx, args.workspaceId, { adminOnly: true });
         const now = Date.now();
         const existing = await ctx.db
             .query("workspaceFeatureInstalls")
@@ -396,6 +452,10 @@ export const rebuildWorkspaceCapabilityPolicies = mutation({
         workspacesProcessed: v.number(),
     }),
     handler: async (ctx, args) => {
+        const { isAdmin } = await requireViewerContext(ctx);
+        if (!isAdmin) {
+            throw new Error("Admin access required");
+        }
         const workspaceIds = args.workspaceId
             ? [args.workspaceId]
             : Array.from(
@@ -419,6 +479,7 @@ export const uninstallFeatureStoreItem = mutation({
     },
     returns: v.null(),
     handler: async (ctx, args) => {
+        await assertWorkspaceAccess(ctx, args.workspaceId, { adminOnly: true });
         const existing = await ctx.db
             .query("workspaceFeatureInstalls")
             .withIndex("by_workspace_itemKey", (q) =>
@@ -454,6 +515,7 @@ export const getWorkspaceCapabilityPolicy = query({
         ),
     }),
     handler: async (ctx, args) => {
+        await assertWorkspaceAccess(ctx, args.workspaceId);
         const workspace = await ctx.db.get(args.workspaceId);
         if (!workspace) {
             return {
@@ -548,6 +610,7 @@ export const listAgentBuilderDrafts = query({
     },
     returns: v.array(draftReturnValidator),
     handler: async (ctx, args) => {
+        await assertWorkspaceAccess(ctx, args.workspaceId);
         const rows = args.itemKey
             ? await ctx.db
                 .query("agentBuilderDrafts")
@@ -606,6 +669,7 @@ export const createAgentBuilderDraft = mutation({
     },
     returns: v.id("agentBuilderDrafts"),
     handler: async (ctx, args) => {
+        await assertWorkspaceAccess(ctx, args.workspaceId, { adminOnly: true });
         const now = Date.now();
         const baseSlug = slugifyAppName(args.appSlug ?? args.name);
         const draftKey = `${args.itemKey}:${baseSlug}`;
@@ -670,6 +734,7 @@ export const updateAgentBuilderDraft = mutation({
         if (!existing) {
             throw new Error("Draft not found");
         }
+        await assertWorkspaceAccess(ctx, existing.workspaceId, { adminOnly: true });
         const nextStatus = args.status ?? existing.status;
         await ctx.db.patch(args.draftId, {
             name: args.name?.trim() ?? existing.name,
@@ -700,6 +765,7 @@ export const archiveAgentBuilderDraft = mutation({
         if (!existing) {
             return null;
         }
+        await assertWorkspaceAccess(ctx, existing.workspaceId, { adminOnly: true });
         await ctx.db.patch(args.draftId, {
             status: "archived",
             archivedAt: Date.now(),
