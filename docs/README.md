@@ -40,6 +40,5 @@ Progress terbaru yang sudah hidup:
 
 Remaining phase terdekat:
 
-1. Preview minimal `Agent Builder` untuk output `json_blocks`.
-2. Sandbox/review contract `custom_code`.
-3. Publish/downstream adapter ke `Superspace`.
+1. Sandbox/review contract `custom_code`.
+2. Publish/downstream adapter ke `Superspace`.

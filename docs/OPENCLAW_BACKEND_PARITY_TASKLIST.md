@@ -434,8 +434,8 @@ Definition of done:
   - runtime sync wrapper sekarang menjalankan worker outbox sebelum pull sync:
     [sync_openclaw_runtime_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_runtime_to_convex.py)
 - [ ] Phase berikutnya: schema/backend untuk `Feature Store`.
-- [ ] Phase berikutnya: schema/backend untuk `Agent Builder` output
-  `json_blocks` dan `custom_code`.
+- [ ] Phase berikutnya: sandbox/review backend untuk `Agent Builder`
+  output `custom_code`.
 
 Remaining breakdown untuk phase selanjutnya:
 
