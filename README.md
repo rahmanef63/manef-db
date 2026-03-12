@@ -150,8 +150,11 @@ Progress terbaru:
 - binding `userIdentity -> workspace` sekarang sudah termirror dari runtime
 - `Feature Store` backend sekarang sudah punya:
   - catalog schema
+  - daftar feature `manef` yang nyata sebagai store items
   - preview metadata
   - install/uninstall per workspace
+  - metadata capability:
+    `featureKey`, `route`, `requiredRoles`, `grantedSkillKeys`, `runtimeDomains`
 - `Agent Builder` backend sekarang sudah punya:
   - draft schema per workspace
   - create/update/archive API
@@ -168,6 +171,7 @@ Remaining phase terdekat:
   `json_blocks`
 - sandbox/review contract `Agent Builder`:
   `custom_code`
+- turunkan install feature menjadi policy skill/capability agent per workspace
 - hardening RBAC untuk install/uninstall store items
 
 Admin write surface yang sudah siap:

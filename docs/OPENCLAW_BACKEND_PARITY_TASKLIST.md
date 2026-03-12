@@ -58,8 +58,13 @@ builder dimulai.
     [catalog.ts](/home/rahman/projects/manef-db/convex/features/featureStore/catalog.ts)
   - API:
     [api.ts](/home/rahman/projects/manef-db/convex/features/featureStore/api.ts)
-- [ ] Bedakan item store:
+- [x] Bedakan item store:
   `workspace-app`, `agent-builder`, `shared-block-set`, `template`, `external app`.
+  Bukti:
+  - katalog sekarang juga memuat `dashboard-feature` untuk feature `manef` yang nyata
+  - field item:
+    `featureKey`, `route`, `requiredRoles`, `grantedSkillKeys`, `runtimeDomains`
+    di [schema.ts](/home/rahman/projects/manef-db/convex/features/featureStore/schema.ts)
 - [x] `Agent Builder` sekarang menyimpan draft untuk dua mode source:
   `json_blocks` dan `custom_code`.
 -  Bukti:
@@ -156,7 +161,12 @@ Progress terbaru untuk `Feature Store`:
   `workspaceFeatureInstalls`
 - [x] Draft `Agent Builder` per workspace:
   `agentBuilderDrafts`
+- [x] Katalog sekarang disejajarkan dengan feature `manef` yang nyata:
+  `overview`, `chat-session`, `inbox`, `agents`, `channels`, `sessions`,
+  `usage`, `crons`, `skills`, `nodes`, `config`, `debug`, `logs`,
+  `users`, `roles`, `audit`, `feature-store`
 - [ ] RBAC backend untuk install/uninstall masih perlu diperketat
+- [ ] Install feature masih belum otomatis menghasilkan policy skill agent/workspace
 - [ ] Publish/write-through ke downstream `Superspace` belum ada
 - [ ] Renderer `json_blocks` belum ada
 - [ ] Sandbox/review contract untuk `custom_code` masih minimal
