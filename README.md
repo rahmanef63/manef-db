@@ -155,6 +155,12 @@ Progress terbaru:
   - install/uninstall per workspace
   - metadata capability:
     `featureKey`, `route`, `requiredRoles`, `grantedSkillKeys`, `runtimeDomains`
+- `skills` sekarang juga berfungsi sebagai `Skills Store` backend:
+  - source-aware metadata
+  - label publisher:
+    `by Rahman`, `by ClawHub`, `by OpenClaw`
+  - metadata `trust`, `scope`, `install state`, `homepage`
+  - query status store untuk ringkasan inventory
 - `Agent Builder` backend sekarang sudah punya:
   - draft schema per workspace
   - create/update/archive API
@@ -172,7 +178,15 @@ Remaining phase terdekat:
 - sandbox/review contract `Agent Builder`:
   `custom_code`
 - turunkan install feature menjadi policy skill/capability agent per workspace
+- turunkan `Skills Store` menjadi policy skill/capability agent per workspace
 - hardening RBAC untuk install/uninstall store items
+
+Skills Store note:
+
+- sumber runtime utama tetap `openclaw skills list --json`
+- klasifikasi `ClawHub` saat ini `pull-ready`, bukan webhook push
+- worker sync lokal memeriksa metadata/lockfile `ClawHub` yang tersedia di host
+  dan memetakannya ke source type `clawhub` bila ditemukan
 
 Admin write surface yang sudah siap:
 

@@ -5,7 +5,11 @@ import { v } from "convex/values";
  * List all skills, optionally filtered by source.
  */
 export const listSkills = query({
-    args: { source: v.optional(v.string()), filter: v.optional(v.string()) },
+    args: {
+        source: v.optional(v.string()),
+        sourceType: v.optional(v.string()),
+        filter: v.optional(v.string()),
+    },
     returns: v.array(
         v.object({
             _id: v.id("skills"),
@@ -14,6 +18,13 @@ export const listSkills = query({
             name: v.string(),
             description: v.optional(v.string()),
             source: v.string(),
+            sourceType: v.optional(v.string()),
+            publisherLabel: v.optional(v.string()),
+            publisherHandle: v.optional(v.string()),
+            trustLevel: v.optional(v.string()),
+            skillScope: v.optional(v.string()),
+            installState: v.optional(v.string()),
+            homepage: v.optional(v.string()),
             enabled: v.boolean(),
             runtimeEnabled: v.optional(v.boolean()),
             hasManualOverride: v.optional(v.boolean()),
@@ -27,6 +38,12 @@ export const listSkills = query({
             skills = await ctx.db
                 .query("skills")
                 .withIndex("by_source", (q) => q.eq("source", args.source!))
+                .order("desc")
+                .take(200);
+        } else if (args.sourceType) {
+            skills = await ctx.db
+                .query("skills")
+                .withIndex("by_sourceType", (q) => q.eq("sourceType", args.sourceType!))
                 .order("desc")
                 .take(200);
         } else {
@@ -48,6 +65,13 @@ export const listSkills = query({
             name: s.name,
             description: s.description,
             source: s.source,
+            sourceType: s.sourceType,
+            publisherLabel: s.publisherLabel,
+            publisherHandle: s.publisherHandle,
+            trustLevel: s.trustLevel,
+            skillScope: s.skillScope,
+            installState: s.installState,
+            homepage: s.homepage,
             enabled: s.enabled,
             runtimeEnabled: s.config?.runtimeEnabled,
             hasManualOverride: s.config?.manualOverrideEnabled !== undefined,
@@ -91,6 +115,13 @@ export const createSkill = mutation({
         name: v.string(),
         description: v.optional(v.string()),
         source: v.string(),
+        sourceType: v.optional(v.string()),
+        publisherLabel: v.optional(v.string()),
+        publisherHandle: v.optional(v.string()),
+        trustLevel: v.optional(v.string()),
+        skillScope: v.optional(v.string()),
+        installState: v.optional(v.string()),
+        homepage: v.optional(v.string()),
         enabled: v.boolean(),
         version: v.optional(v.string()),
         requiredApiKeys: v.optional(v.array(v.string())),
@@ -119,6 +150,13 @@ export const syncRuntimeSkills = mutation({
                 name: v.string(),
                 description: v.optional(v.string()),
                 source: v.string(),
+                sourceType: v.optional(v.string()),
+                publisherLabel: v.optional(v.string()),
+                publisherHandle: v.optional(v.string()),
+                trustLevel: v.optional(v.string()),
+                skillScope: v.optional(v.string()),
+                installState: v.optional(v.string()),
+                homepage: v.optional(v.string()),
                 enabled: v.boolean(),
                 version: v.optional(v.string()),
                 toolCount: v.optional(v.number()),
@@ -198,5 +236,35 @@ export const refreshSkills = action({
     handler: async (ctx) => {
         console.log("Refreshing skills from gateway...");
         return null;
+    },
+});
+
+export const getSkillStoreStatus = query({
+    args: {},
+    returns: v.object({
+        total: v.number(),
+        bySourceType: v.array(v.object({ key: v.string(), count: v.number() })),
+        hasClawHubItems: v.boolean(),
+        hasRahmanItems: v.boolean(),
+        hasBundledItems: v.boolean(),
+    }),
+    handler: async (ctx) => {
+        const skills = await ctx.db.query("skills").take(500);
+        const counts = new Map<string, number>();
+        for (const skill of skills) {
+            const key = skill.sourceType ?? "unknown";
+            counts.set(key, (counts.get(key) ?? 0) + 1);
+        }
+        const bySourceType = Array.from(counts.entries())
+            .sort(([a], [b]) => a.localeCompare(b, "en"))
+            .map(([key, count]) => ({ key, count }));
+
+        return {
+            total: skills.length,
+            bySourceType,
+            hasClawHubItems: skills.some((skill) => skill.sourceType === "clawhub"),
+            hasRahmanItems: skills.some((skill) => skill.sourceType === "rahman_local"),
+            hasBundledItems: skills.some((skill) => skill.sourceType === "openclaw_bundled"),
+        };
     },
 });

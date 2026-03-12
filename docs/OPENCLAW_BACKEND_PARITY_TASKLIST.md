@@ -550,6 +550,28 @@ Definition of done:
   - sync script:
     [sync_openclaw_skills_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_skills_to_convex.py)
   - timer service aktif menjalankan sync berkala
+- [x] Tambahkan metadata `Skills Store` untuk source/publisher/trust/scope.
+  Bukti:
+  - field baru:
+    `sourceType`, `publisherLabel`, `publisherHandle`, `trustLevel`,
+    `skillScope`, `installState`, `homepage`
+  - schema:
+    [schema.ts](/home/rahman/projects/manef-db/convex/features/skills/schema.ts)
+  - API read/sync:
+    [api.ts](/home/rahman/projects/manef-db/convex/features/skills/api.ts)
+- [x] Klasifikasikan skill menjadi:
+  `by Rahman`, `by ClawHub`, `by OpenClaw`.
+  Bukti:
+  - sync script kini mengklasifikasikan hasil runtime menjadi:
+    `rahman_local`, `clawhub`, `openclaw_bundled`
+  - source klasifikasi ada di:
+    [sync_openclaw_skills_to_convex.py](/home/rahman/projects/manef-db/scripts/sync_openclaw_skills_to_convex.py)
+- [x] Siapkan `ClawHub` sebagai sync source `pull-ready`, bukan webhook push.
+  Bukti:
+  - sync script memeriksa kandidat lockfile/metadata lokal `ClawHub`
+  - backend menyediakan query status store:
+    `getSkillStoreStatus`
+  - tidak ada asumsi webhook eksternal dari registry
 - [ ] Tambahkan toggle enable/disable yang konsisten dengan runtime.
 - [x] Tambahkan toggle enable/disable yang konsisten dengan sync berikutnya.
   Bukti:
@@ -563,6 +585,9 @@ Definition of done:
 - daftar skill di DB sama dengan runtime setelah sync
 - toggle dari UI terbaca lagi dari DB
 - sync tidak menduplikasi record skill yang sama
+- source label dan metadata trust/scope tersedia untuk `Skills Store`
+- jika metadata `ClawHub` muncul di host, backend bisa memetakannya tanpa
+  perubahan schema baru
 
 ## Config
 
