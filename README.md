@@ -152,6 +152,9 @@ Progress terbaru:
   - catalog schema
   - preview metadata
   - install/uninstall per workspace
+- `Agent Builder` backend sekarang sudah punya:
+  - draft schema per workspace
+  - create/update/archive API
 - backend auth sekarang mendukung:
   - login `email/phone`
   - registration request
@@ -161,8 +164,10 @@ Progress terbaru:
 Remaining phase terdekat:
 
 - write-through/publish downstream untuk `Feature Store`
-- `Agent Builder` backend:
-  `json_blocks` dan `custom_code`
+- renderer/publish contract `Agent Builder`:
+  `json_blocks`
+- sandbox/review contract `Agent Builder`:
+  `custom_code`
 - hardening RBAC untuk install/uninstall store items
 
 Admin write surface yang sudah siap:

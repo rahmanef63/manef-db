@@ -52,4 +52,27 @@ export const featureStoreSchema = {
         .index("by_workspace", ["workspaceId"])
         .index("by_itemKey", ["itemKey"])
         .index("by_workspace_itemKey", ["workspaceId", "itemKey"]),
+
+    agentBuilderDrafts: defineTable({
+        workspaceId: v.id("workspaceTrees"),
+        itemKey: v.string(),
+        draftKey: v.string(),
+        name: v.string(),
+        appSlug: v.string(),
+        description: v.optional(v.string()),
+        builderMode: v.string(),
+        status: v.string(),
+        source: v.string(),
+        linkedAgentIds: v.optional(v.array(v.string())),
+        linkedChannelKeys: v.optional(v.array(v.string())),
+        previewConfig: v.optional(v.any()),
+        outputConfig: v.optional(v.any()),
+        downstreamTarget: v.optional(v.string()),
+        createdAt: v.float64(),
+        updatedAt: v.float64(),
+        archivedAt: v.optional(v.float64()),
+    })
+        .index("by_workspace", ["workspaceId"])
+        .index("by_workspace_itemKey", ["workspaceId", "itemKey"])
+        .index("by_workspace_draftKey", ["workspaceId", "draftKey"]),
 };

@@ -60,8 +60,16 @@ builder dimulai.
     [api.ts](/home/rahman/projects/manef-db/convex/features/featureStore/api.ts)
 - [ ] Bedakan item store:
   `workspace-app`, `agent-builder`, `shared-block-set`, `template`, `external app`.
-- [ ] `Agent Builder` harus menyimpan dua mode source:
+- [x] `Agent Builder` sekarang menyimpan draft untuk dua mode source:
   `json_blocks` dan `custom_code`.
+-  Bukti:
+  - schema draft:
+    `agentBuilderDrafts` di
+    [schema.ts](/home/rahman/projects/manef-db/convex/features/featureStore/schema.ts)
+  - API:
+    `listAgentBuilderDrafts`, `createAgentBuilderDraft`,
+    `updateAgentBuilderDraft`, `archiveAgentBuilderDraft`
+    di [api.ts](/home/rahman/projects/manef-db/convex/features/featureStore/api.ts)
 - [ ] `json_blocks` harus bisa dirender ulang dari schema/metadata backend tanpa
   kehilangan struktur block.
 - [ ] `custom_code` harus punya metadata sandbox/review yang jelas, tidak cukup
@@ -146,8 +154,12 @@ Progress terbaru untuk `Feature Store`:
   `seedFeatureStoreCatalog`
 - [x] Install/uninstall item per workspace:
   `workspaceFeatureInstalls`
+- [x] Draft `Agent Builder` per workspace:
+  `agentBuilderDrafts`
 - [ ] RBAC backend untuk install/uninstall masih perlu diperketat
 - [ ] Publish/write-through ke downstream `Superspace` belum ada
+- [ ] Renderer `json_blocks` belum ada
+- [ ] Sandbox/review contract untuk `custom_code` masih minimal
 
 ## Navigator model
 
