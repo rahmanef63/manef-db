@@ -72,7 +72,7 @@ async function assertWorkspaceAccess(
 async function syncWorkspaceCapabilityPolicies(
     ctx: any,
     workspaceId: any,
-    featureKeys: string[],
+    installedItemKeys: string[],
 ) {
     const workspace = await ctx.db.get(workspaceId);
     if (!workspace) {
@@ -80,13 +80,13 @@ async function syncWorkspaceCapabilityPolicies(
     }
 
     const now = Date.now();
-    const featureItems = await getFeatureStoreItemMap(ctx, featureKeys);
+    const featureItems = await getFeatureStoreItemMap(ctx, installedItemKeys);
     const skillSources = new Map<string, string[]>();
-    for (const featureKey of featureKeys) {
-        const item = featureItems.get(featureKey);
+    for (const itemKey of installedItemKeys) {
+        const item = featureItems.get(itemKey);
         for (const skillKey of item?.grantedSkillKeys ?? []) {
             const next = skillSources.get(skillKey) ?? [];
-            next.push(featureKey);
+            next.push(itemKey);
             skillSources.set(skillKey, next);
         }
     }
@@ -190,18 +190,30 @@ async function syncWorkspaceFeatureKeys(
         .query("workspaceFeatureInstalls")
         .withIndex("by_workspace", (q: any) => q.eq("workspaceId", workspaceId))
         .collect();
-    const featureKeys = Array.from<string>(
+    const installedItemKeys = Array.from<string>(
         new Set(
             installs
                 .filter((row: any) => row.installState !== "uninstalled")
                 .map((row: any) => row.itemKey),
         ),
     ).sort((left: string, right: string) => left.localeCompare(right, "en"));
+    const itemMap = await getFeatureStoreItemMap(ctx, installedItemKeys);
+    const featureKeys = Array.from<string>(
+        new Set(
+            installedItemKeys.flatMap((itemKey) => {
+                const item = itemMap.get(itemKey);
+                if (!item || item.itemType !== "dashboard-feature" || !item.featureKey) {
+                    return [];
+                }
+                return [item.featureKey];
+            }),
+        ),
+    ).sort((left: string, right: string) => left.localeCompare(right, "en"));
     await ctx.db.patch(workspaceId, {
         featureKeys,
         updatedAt: Date.now(),
     });
-    await syncWorkspaceCapabilityPolicies(ctx, workspaceId, featureKeys);
+    await syncWorkspaceCapabilityPolicies(ctx, workspaceId, installedItemKeys);
 }
 
 async function getWorkspaceAgentIds(ctx: any, workspace: any) {
