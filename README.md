@@ -164,9 +164,16 @@ Progress terbaru:
 - `Agent Builder` backend sekarang sudah punya:
   - draft schema per workspace
   - create/update/archive API
+  - contract output minimum:
+    `requiredFeatureKeys`, `requiredSkillKeys`, linked agents/channels
 - `workspaceTrees` sekarang juga menyimpan `featureKeys`:
   - daftar feature yang terpasang pada workspace tersebut
   - ikut dikembalikan oleh `openclawNavigator`
+- install feature sekarang juga menurunkan policy capability:
+  - `workspaceSkillPolicies`
+  - `workspaceAgentSkillPolicies`
+  - query ringkasan:
+    `getWorkspaceCapabilityPolicy`
 - auth admin sekarang juga punya mutation reset password sementara untuk user:
   - dipakai oleh `Admin -> Users` di frontend
 - backend auth sekarang mendukung:
@@ -183,7 +190,6 @@ Remaining phase terdekat:
   `json_blocks`
 - sandbox/review contract `Agent Builder`:
   `custom_code`
-- turunkan install feature menjadi policy skill/capability agent per workspace
 - turunkan `Skills Store` menjadi policy skill/capability agent per workspace
 - hardening RBAC untuk install/uninstall store items
 

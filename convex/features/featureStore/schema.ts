@@ -58,6 +58,32 @@ export const featureStoreSchema = {
         .index("by_itemKey", ["itemKey"])
         .index("by_workspace_itemKey", ["workspaceId", "itemKey"]),
 
+    workspaceSkillPolicies: defineTable({
+        workspaceId: v.id("workspaceTrees"),
+        skillKey: v.string(),
+        source: v.string(),
+        sourceItemKeys: v.array(v.string()),
+        status: v.string(),
+        createdAt: v.float64(),
+        updatedAt: v.float64(),
+    })
+        .index("by_workspace", ["workspaceId"])
+        .index("by_workspace_skillKey", ["workspaceId", "skillKey"]),
+
+    workspaceAgentSkillPolicies: defineTable({
+        workspaceId: v.id("workspaceTrees"),
+        agentId: v.string(),
+        skillKey: v.string(),
+        source: v.string(),
+        sourceItemKeys: v.array(v.string()),
+        status: v.string(),
+        createdAt: v.float64(),
+        updatedAt: v.float64(),
+    })
+        .index("by_workspace", ["workspaceId"])
+        .index("by_workspace_agent", ["workspaceId", "agentId"])
+        .index("by_workspace_agent_skillKey", ["workspaceId", "agentId", "skillKey"]),
+
     agentBuilderDrafts: defineTable({
         workspaceId: v.id("workspaceTrees"),
         itemKey: v.string(),
@@ -70,6 +96,8 @@ export const featureStoreSchema = {
         source: v.string(),
         linkedAgentIds: v.optional(v.array(v.string())),
         linkedChannelKeys: v.optional(v.array(v.string())),
+        requiredFeatureKeys: v.optional(v.array(v.string())),
+        requiredSkillKeys: v.optional(v.array(v.string())),
         previewConfig: v.optional(v.any()),
         outputConfig: v.optional(v.any()),
         downstreamTarget: v.optional(v.string()),

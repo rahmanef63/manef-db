@@ -95,6 +95,26 @@ builder dimulai.
   - install/uninstall feature sekarang menyinkronkan `workspaceTrees.featureKeys`
   - file:
     [featureStore/api.ts](/home/rahman/projects/manef-db/convex/features/featureStore/api.ts)
+- [x] Install feature sekarang menurunkan `grantedSkillKeys` menjadi policy nyata
+  `workspace -> skills` dan `workspace -> agents -> skills`.
+  Bukti:
+  - tabel baru:
+    `workspaceSkillPolicies`, `workspaceAgentSkillPolicies`
+  - sinkronisasi turunan:
+    `syncWorkspaceCapabilityPolicies`
+  - query policy:
+    `getWorkspaceCapabilityPolicy`
+  - file:
+    [schema.ts](/home/rahman/projects/manef-db/convex/features/featureStore/schema.ts)
+    [api.ts](/home/rahman/projects/manef-db/convex/features/featureStore/api.ts)
+- [x] `Agent Builder` draft sekarang menyimpan kontrak output policy minimum:
+  workspace target, linked agents/channels, required feature keys, required skill keys.
+  Bukti:
+  - field baru:
+    `requiredFeatureKeys`, `requiredSkillKeys`
+  - file:
+    [schema.ts](/home/rahman/projects/manef-db/convex/features/featureStore/schema.ts)
+    [api.ts](/home/rahman/projects/manef-db/convex/features/featureStore/api.ts)
 - [ ] Backend harus siap menyimpan metadata target integrasi `Superspace`.
 
 Konteks integrasi eksternal:
@@ -173,7 +193,8 @@ Progress terbaru untuk `Feature Store`:
   `usage`, `crons`, `skills`, `nodes`, `config`, `debug`, `logs`,
   `users`, `roles`, `audit`, `feature-store`
 - [ ] RBAC backend untuk install/uninstall masih perlu diperketat
-- [ ] Install feature masih belum otomatis menghasilkan policy skill agent/workspace
+- [x] Install feature sekarang otomatis menghasilkan policy skill
+  agent/workspace.
 - [ ] Publish/write-through ke downstream `Superspace` belum ada
 - [ ] Renderer `json_blocks` belum ada
 - [ ] Sandbox/review contract untuk `custom_code` masih minimal

@@ -2,6 +2,137 @@ import { mutation, query } from "../../_generated/server";
 import { v } from "convex/values";
 import { FEATURE_STORE_SEED } from "./catalog";
 
+function sortedUnique(values: string[]) {
+    return Array.from(new Set(values.filter(Boolean))).sort((left, right) =>
+        left.localeCompare(right, "en"),
+    );
+}
+
+async function getFeatureStoreItemMap(ctx: any, itemKeys: string[]) {
+    const rows = await Promise.all(
+        itemKeys.map((itemKey) =>
+            ctx.db
+                .query("featureStoreItems")
+                .withIndex("by_itemKey", (q: any) => q.eq("itemKey", itemKey))
+                .first(),
+        ),
+    );
+    return new Map(
+        rows
+            .filter((row): row is NonNullable<typeof row> => row != null)
+            .map((row) => [row.itemKey, row]),
+    );
+}
+
+async function syncWorkspaceCapabilityPolicies(
+    ctx: any,
+    workspaceId: any,
+    featureKeys: string[],
+) {
+    const workspace = await ctx.db.get(workspaceId);
+    if (!workspace) {
+        return;
+    }
+
+    const now = Date.now();
+    const featureItems = await getFeatureStoreItemMap(ctx, featureKeys);
+    const skillSources = new Map<string, string[]>();
+    for (const featureKey of featureKeys) {
+        const item = featureItems.get(featureKey);
+        for (const skillKey of item?.grantedSkillKeys ?? []) {
+            const next = skillSources.get(skillKey) ?? [];
+            next.push(featureKey);
+            skillSources.set(skillKey, next);
+        }
+    }
+
+    const effectiveSkillKeys = sortedUnique(Array.from(skillSources.keys()));
+    const existingWorkspacePolicies = await ctx.db
+        .query("workspaceSkillPolicies")
+        .withIndex("by_workspace", (q: any) => q.eq("workspaceId", workspaceId))
+        .collect();
+    const existingWorkspacePolicyMap = new Map<string, any>(
+        existingWorkspacePolicies.map((row: any) => [row.skillKey, row]),
+    );
+
+    for (const row of existingWorkspacePolicies) {
+        if (!skillSources.has(row.skillKey)) {
+            await ctx.db.delete(row._id);
+        }
+    }
+
+    for (const skillKey of effectiveSkillKeys) {
+        const sourceItemKeys = sortedUnique(skillSources.get(skillKey) ?? []);
+        const existing = existingWorkspacePolicyMap.get(skillKey);
+        const payload = {
+            workspaceId,
+            skillKey,
+            source: "feature_install",
+            sourceItemKeys,
+            status: "active",
+            updatedAt: now,
+        };
+        if (existing) {
+            await ctx.db.patch(existing._id, payload);
+        } else {
+            await ctx.db.insert("workspaceSkillPolicies", {
+                ...payload,
+                createdAt: now,
+            });
+        }
+    }
+
+    const links = await ctx.db
+        .query("workspaceAgents")
+        .withIndex("by_workspace", (q: any) => q.eq("workspaceId", workspaceId))
+        .collect();
+    const agentIds = sortedUnique([
+        ...links.map((link: any) => link.agentId),
+        ...(workspace.agentId ? [workspace.agentId] : []),
+    ]);
+    const existingAgentPolicies = await ctx.db
+        .query("workspaceAgentSkillPolicies")
+        .withIndex("by_workspace", (q: any) => q.eq("workspaceId", workspaceId))
+        .collect();
+    const keepKeys = new Set(
+        agentIds.flatMap((agentId) =>
+            effectiveSkillKeys.map((skillKey) => `${agentId}::${skillKey}`),
+        ),
+    );
+    for (const row of existingAgentPolicies) {
+        if (!keepKeys.has(`${row.agentId}::${row.skillKey}`)) {
+            await ctx.db.delete(row._id);
+        }
+    }
+
+    const existingAgentPolicyMap = new Map<string, any>(
+        existingAgentPolicies.map((row: any) => [`${row.agentId}::${row.skillKey}`, row]),
+    );
+    for (const agentId of agentIds) {
+        for (const skillKey of effectiveSkillKeys) {
+            const sourceItemKeys = sortedUnique(skillSources.get(skillKey) ?? []);
+            const existing = existingAgentPolicyMap.get(`${agentId}::${skillKey}`);
+            const payload = {
+                workspaceId,
+                agentId,
+                skillKey,
+                source: "feature_install",
+                sourceItemKeys,
+                status: "active",
+                updatedAt: now,
+            };
+            if (existing) {
+                await ctx.db.patch(existing._id, payload);
+            } else {
+                await ctx.db.insert("workspaceAgentSkillPolicies", {
+                    ...payload,
+                    createdAt: now,
+                });
+            }
+        }
+    }
+}
+
 async function syncWorkspaceFeatureKeys(
     ctx: any,
     workspaceId: any,
@@ -21,6 +152,7 @@ async function syncWorkspaceFeatureKeys(
         featureKeys,
         updatedAt: Date.now(),
     });
+    await syncWorkspaceCapabilityPolicies(ctx, workspaceId, featureKeys);
 }
 
 export const seedFeatureStoreCatalog = mutation({
@@ -252,6 +384,30 @@ export const installFeatureStoreItem = mutation({
     },
 });
 
+export const rebuildWorkspaceCapabilityPolicies = mutation({
+    args: {
+        workspaceId: v.optional(v.id("workspaceTrees")),
+    },
+    returns: v.object({
+        workspacesProcessed: v.number(),
+    }),
+    handler: async (ctx, args) => {
+        const workspaceIds = args.workspaceId
+            ? [args.workspaceId]
+            : Array.from(
+                new Set(
+                    (
+                        await ctx.db.query("workspaceFeatureInstalls").collect()
+                    ).map((row) => row.workspaceId),
+                ),
+            );
+        for (const workspaceId of workspaceIds) {
+            await syncWorkspaceFeatureKeys(ctx, workspaceId);
+        }
+        return { workspacesProcessed: workspaceIds.length };
+    },
+});
+
 export const uninstallFeatureStoreItem = mutation({
     args: {
         workspaceId: v.id("workspaceTrees"),
@@ -277,6 +433,78 @@ export const uninstallFeatureStoreItem = mutation({
     },
 });
 
+export const getWorkspaceCapabilityPolicy = query({
+    args: {
+        workspaceId: v.id("workspaceTrees"),
+    },
+    returns: v.object({
+        workspaceId: v.id("workspaceTrees"),
+        featureKeys: v.array(v.string()),
+        grantedSkillKeys: v.array(v.string()),
+        agentPolicies: v.array(
+            v.object({
+                agentId: v.string(),
+                skillKeys: v.array(v.string()),
+                sourceItemKeys: v.array(v.string()),
+            }),
+        ),
+    }),
+    handler: async (ctx, args) => {
+        const workspace = await ctx.db.get(args.workspaceId);
+        if (!workspace) {
+            return {
+                workspaceId: args.workspaceId,
+                featureKeys: [],
+                grantedSkillKeys: [],
+                agentPolicies: [],
+            };
+        }
+
+        const workspacePolicies = await ctx.db
+            .query("workspaceSkillPolicies")
+            .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+            .collect();
+        const agentPolicies = await ctx.db
+            .query("workspaceAgentSkillPolicies")
+            .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+            .collect();
+        const groupedAgentPolicies = new Map<
+            string,
+            { skillKeys: string[]; sourceItemKeys: string[] }
+        >();
+
+        for (const policy of agentPolicies) {
+            if (policy.status !== "active") {
+                continue;
+            }
+            const existing = groupedAgentPolicies.get(policy.agentId) ?? {
+                skillKeys: [],
+                sourceItemKeys: [],
+            };
+            existing.skillKeys.push(policy.skillKey);
+            existing.sourceItemKeys.push(...policy.sourceItemKeys);
+            groupedAgentPolicies.set(policy.agentId, existing);
+        }
+
+        return {
+            workspaceId: args.workspaceId,
+            featureKeys: sortedUnique(workspace.featureKeys ?? []),
+            grantedSkillKeys: sortedUnique(
+                workspacePolicies
+                    .filter((policy) => policy.status === "active")
+                    .map((policy) => policy.skillKey),
+            ),
+            agentPolicies: Array.from(groupedAgentPolicies.entries())
+                .sort(([left], [right]) => left.localeCompare(right, "en"))
+                .map(([agentId, value]) => ({
+                    agentId,
+                    skillKeys: sortedUnique(value.skillKeys),
+                    sourceItemKeys: sortedUnique(value.sourceItemKeys),
+                })),
+        };
+    },
+});
+
 const draftReturnValidator = v.object({
     _id: v.id("agentBuilderDrafts"),
     workspaceId: v.id("workspaceTrees"),
@@ -290,6 +518,8 @@ const draftReturnValidator = v.object({
     source: v.string(),
     linkedAgentIds: v.optional(v.array(v.string())),
     linkedChannelKeys: v.optional(v.array(v.string())),
+    requiredFeatureKeys: v.optional(v.array(v.string())),
+    requiredSkillKeys: v.optional(v.array(v.string())),
     previewConfig: v.optional(v.any()),
     outputConfig: v.optional(v.any()),
     downstreamTarget: v.optional(v.string()),
@@ -342,6 +572,8 @@ export const listAgentBuilderDrafts = query({
                 source: row.source,
                 linkedAgentIds: row.linkedAgentIds,
                 linkedChannelKeys: row.linkedChannelKeys,
+                requiredFeatureKeys: row.requiredFeatureKeys,
+                requiredSkillKeys: row.requiredSkillKeys,
                 previewConfig: row.previewConfig,
                 outputConfig: row.outputConfig,
                 downstreamTarget: row.downstreamTarget,
@@ -362,6 +594,8 @@ export const createAgentBuilderDraft = mutation({
         appSlug: v.optional(v.string()),
         linkedAgentIds: v.optional(v.array(v.string())),
         linkedChannelKeys: v.optional(v.array(v.string())),
+        requiredFeatureKeys: v.optional(v.array(v.string())),
+        requiredSkillKeys: v.optional(v.array(v.string())),
         previewConfig: v.optional(v.any()),
         outputConfig: v.optional(v.any()),
         downstreamTarget: v.optional(v.string()),
@@ -390,6 +624,8 @@ export const createAgentBuilderDraft = mutation({
             source: "manual",
             linkedAgentIds: args.linkedAgentIds,
             linkedChannelKeys: args.linkedChannelKeys,
+            requiredFeatureKeys: args.requiredFeatureKeys,
+            requiredSkillKeys: args.requiredSkillKeys,
             previewConfig: args.previewConfig,
             outputConfig: args.outputConfig,
             downstreamTarget: args.downstreamTarget,
@@ -418,6 +654,8 @@ export const updateAgentBuilderDraft = mutation({
         status: v.optional(v.union(v.literal("draft"), v.literal("ready"), v.literal("archived"))),
         linkedAgentIds: v.optional(v.array(v.string())),
         linkedChannelKeys: v.optional(v.array(v.string())),
+        requiredFeatureKeys: v.optional(v.array(v.string())),
+        requiredSkillKeys: v.optional(v.array(v.string())),
         previewConfig: v.optional(v.any()),
         outputConfig: v.optional(v.any()),
         downstreamTarget: v.optional(v.string()),
@@ -436,6 +674,8 @@ export const updateAgentBuilderDraft = mutation({
             status: nextStatus,
             linkedAgentIds: args.linkedAgentIds ?? existing.linkedAgentIds,
             linkedChannelKeys: args.linkedChannelKeys ?? existing.linkedChannelKeys,
+            requiredFeatureKeys: args.requiredFeatureKeys ?? existing.requiredFeatureKeys,
+            requiredSkillKeys: args.requiredSkillKeys ?? existing.requiredSkillKeys,
             previewConfig: args.previewConfig ?? existing.previewConfig,
             outputConfig: args.outputConfig ?? existing.outputConfig,
             downstreamTarget: args.downstreamTarget ?? existing.downstreamTarget,

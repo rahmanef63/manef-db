@@ -91,6 +91,19 @@ def main() -> int:
     cron_jobs = run_convex("features/crons/api:listJobs", {})
     require(isinstance(cron_jobs, list), "cron jobs response must be a list")
 
+    capability_policy = (
+        run_convex(
+            "features/featureStore/api:getWorkspaceCapabilityPolicy",
+            {"workspaceId": roots[0]["_id"]},
+        )
+        if roots
+        else {"featureKeys": [], "grantedSkillKeys": [], "agentPolicies": []}
+    )
+    require(
+        isinstance(capability_policy, dict),
+        "workspace capability policy response must be an object",
+    )
+
     logs = run_convex("features/logs/api:getRecentLogs", {"limit": 5})
     require(isinstance(logs, list), "logs response must be a list")
     if logs:
@@ -155,6 +168,7 @@ def main() -> int:
                 "configEntries": len(config_entries),
                 "workspaceDocs": len(workspace_docs),
                 "cronJobs": len(cron_jobs),
+                "workspacePolicySkills": len(capability_policy.get("grantedSkillKeys", [])),
                 "logsChecked": len(logs),
                 "nodes": len(nodes),
                 "timestamp": int(time.time() * 1000),
