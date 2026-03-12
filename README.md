@@ -6,6 +6,7 @@ Convex backend repo for Manef.
 
 - [Deployment status 2026-03-11](./DEPLOYMENT_STATUS_2026-03-11.md)
 - [Docs index](./docs/README.md)
+- [Target architecture](./docs/TARGET_ARCHITECTURE.md)
 - [OpenClaw backend parity tasklist](./docs/OPENCLAW_BACKEND_PARITY_TASKLIST.md)
 
 Session handoff references:
