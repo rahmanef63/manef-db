@@ -17,6 +17,7 @@ export const getUsers = query({
     returns: v.array(
         v.object({
             _id: v.id("authUsers"),
+            hasPassword: v.boolean(),
             name: v.string(),
             email: v.string(),
             phone: v.optional(v.string()),
@@ -63,6 +64,7 @@ export const getUsers = query({
                 : [];
             result.push({
                 _id: u._id,
+                hasPassword: Boolean(u.passwordHash),
                 name: u.name,
                 email: u.email,
                 phone: u.phone,
