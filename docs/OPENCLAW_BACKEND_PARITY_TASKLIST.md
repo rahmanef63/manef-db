@@ -88,6 +88,13 @@ builder dimulai.
   - mutation:
     `installFeatureStoreItem`, `uninstallFeatureStoreItem`
     di [api.ts](/home/rahman/projects/manef-db/convex/features/featureStore/api.ts)
+- [x] Setiap workspace sekarang menyimpan array `featureKeys` yang dimiliki.
+  Bukti:
+  - schema:
+    [workspace/schema.ts](/home/rahman/projects/manef-db/convex/features/workspace/schema.ts)
+  - install/uninstall feature sekarang menyinkronkan `workspaceTrees.featureKeys`
+  - file:
+    [featureStore/api.ts](/home/rahman/projects/manef-db/convex/features/featureStore/api.ts)
 - [ ] Backend harus siap menyimpan metadata target integrasi `Superspace`.
 
 Konteks integrasi eksternal:
@@ -191,6 +198,9 @@ Progress terbaru untuk `Feature Store`:
   - [onboarding.ts](/home/rahman/projects/manef-db/convex/onboarding.ts)
   - [migrations.ts](/home/rahman/projects/manef-db/convex/migrations.ts)
   - [agentOps.ts](/home/rahman/projects/manef-db/convex/agentOps.ts)
+- [x] Navigator sekarang juga mengembalikan `featureKeys` per root/child workspace.
+  Bukti:
+  - [openclawNavigator.ts](/home/rahman/projects/manef-db/convex/openclawNavigator.ts)
 
 Definition of done:
 

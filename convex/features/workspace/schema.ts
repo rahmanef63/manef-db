@@ -46,6 +46,7 @@ export const workspaceSchema = {
         agentId: v.optional(v.string()),
         createdAt: v.float64(),
         description: v.optional(v.string()),
+        featureKeys: v.optional(v.array(v.string())),
         fileCount: v.optional(v.float64()),
         name: v.string(),
         ownerId: v.optional(v.id("userProfiles")),

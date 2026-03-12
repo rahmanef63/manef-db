@@ -2,6 +2,27 @@ import { mutation, query } from "../../_generated/server";
 import { v } from "convex/values";
 import { FEATURE_STORE_SEED } from "./catalog";
 
+async function syncWorkspaceFeatureKeys(
+    ctx: any,
+    workspaceId: any,
+) {
+    const installs = await ctx.db
+        .query("workspaceFeatureInstalls")
+        .withIndex("by_workspace", (q: any) => q.eq("workspaceId", workspaceId))
+        .collect();
+    const featureKeys = Array.from<string>(
+        new Set(
+            installs
+                .filter((row: any) => row.installState !== "uninstalled")
+                .map((row: any) => row.itemKey),
+        ),
+    ).sort((left: string, right: string) => left.localeCompare(right, "en"));
+    await ctx.db.patch(workspaceId, {
+        featureKeys,
+        updatedAt: Date.now(),
+    });
+}
+
 export const seedFeatureStoreCatalog = mutation({
     args: {},
     returns: v.object({
@@ -218,13 +239,16 @@ export const installFeatureStoreItem = mutation({
 
         if (existing) {
             await ctx.db.patch(existing._id, payload);
+            await syncWorkspaceFeatureKeys(ctx, args.workspaceId);
             return existing._id;
         }
 
-        return await ctx.db.insert("workspaceFeatureInstalls", {
+        const installId = await ctx.db.insert("workspaceFeatureInstalls", {
             ...payload,
             createdAt: now,
         });
+        await syncWorkspaceFeatureKeys(ctx, args.workspaceId);
+        return installId;
     },
 });
 
@@ -248,6 +272,7 @@ export const uninstallFeatureStoreItem = mutation({
             installState: "uninstalled",
             updatedAt: Date.now(),
         });
+        await syncWorkspaceFeatureKeys(ctx, args.workspaceId);
         return null;
     },
 });

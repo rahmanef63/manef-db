@@ -44,11 +44,13 @@ export const listScopes = query({
         agentId: v.optional(v.string()),
         agentIds: v.array(v.string()),
         childCount: v.number(),
+        featureKeys: v.array(v.string()),
         children: v.array(
           v.object({
             _id: v.id("workspaceTrees"),
             agentId: v.optional(v.string()),
             agentIds: v.array(v.string()),
+            featureKeys: v.array(v.string()),
             name: v.string(),
             ownerEmail: v.optional(v.string()),
             ownerId: v.optional(v.id("userProfiles")),
@@ -136,6 +138,9 @@ export const listScopes = query({
     ).flat();
 
     const workspaceAgentLinks = await ctx.db.query("workspaceAgents").collect();
+    const workspaceFeatureInstalls = await ctx.db
+      .query("workspaceFeatureInstalls")
+      .collect();
     const agentLinksByWorkspace = new Map<
       string,
       Array<(typeof workspaceAgentLinks)[number]>
@@ -145,6 +150,16 @@ export const listScopes = query({
       const next = agentLinksByWorkspace.get(key) ?? [];
       next.push(link);
       agentLinksByWorkspace.set(key, next);
+    }
+    const featureKeysByWorkspace = new Map<string, string[]>();
+    for (const install of workspaceFeatureInstalls) {
+      if (install.installState === "uninstalled") {
+        continue;
+      }
+      const key = install.workspaceId as string;
+      const next = featureKeysByWorkspace.get(key) ?? [];
+      next.push(install.itemKey);
+      featureKeysByWorkspace.set(key, next);
     }
 
     const treesById = new Map(workspaceTrees.map((tree) => [tree._id, tree]));
@@ -209,6 +224,17 @@ export const listScopes = query({
       return primary?.agentId ?? tree.agentId;
     };
 
+    const featureKeysForTree = (
+      tree: (typeof workspaceTrees)[number],
+    ): string[] => {
+      return Array.from(
+        new Set([
+          ...(tree.featureKeys ?? []),
+          ...(featureKeysByWorkspace.get(tree._id as string) ?? []),
+        ]),
+      ).sort((left, right) => left.localeCompare(right, "en"));
+    };
+
     const rawRoots = workspaceTrees
       .filter((tree) => {
         if (!tree.parentId) {
@@ -261,6 +287,7 @@ export const listScopes = query({
               _id: child._id,
               agentId: primaryAgentIdForTree(child),
               agentIds: childAgentIds,
+              featureKeys: featureKeysForTree(child),
               name:
                 child.type === "user"
                   ? childProfile?.name ?? child.name
@@ -280,6 +307,7 @@ export const listScopes = query({
             agentId: primaryAgentIdForTree(visibleRoot),
             agentIds: rootAgentIds,
             childCount: children.length,
+            featureKeys: featureKeysForTree(visibleRoot),
             children,
             name:
               visibleRoot.type === "user"

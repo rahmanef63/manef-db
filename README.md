@@ -164,6 +164,11 @@ Progress terbaru:
 - `Agent Builder` backend sekarang sudah punya:
   - draft schema per workspace
   - create/update/archive API
+- `workspaceTrees` sekarang juga menyimpan `featureKeys`:
+  - daftar feature yang terpasang pada workspace tersebut
+  - ikut dikembalikan oleh `openclawNavigator`
+- auth admin sekarang juga punya mutation reset password sementara untuk user:
+  - dipakai oleh `Admin -> Users` di frontend
 - backend auth sekarang mendukung:
   - login `email/phone`
   - registration request

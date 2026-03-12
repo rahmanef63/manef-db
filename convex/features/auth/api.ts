@@ -1081,6 +1081,46 @@ export const changePassword = mutation({
   },
 });
 
+export const issueTemporaryPasswordForUser = mutation({
+  args: {
+    userId: v.id("authUsers"),
+  },
+  returns: v.object({
+    temporaryPassword: v.string(),
+    userId: v.id("authUsers"),
+  }),
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const now = Date.now();
+    const temporaryPassword = generateTemporaryPassword();
+    const temporaryPasswordHash = await hashPassword(temporaryPassword);
+
+    await ctx.db.patch(user._id, {
+      mustChangePassword: true,
+      passwordHash: temporaryPasswordHash,
+      temporaryPasswordIssuedAt: now,
+      updatedAt: now,
+    });
+
+    await createAuditLog(ctx, {
+      event: "TEMP_PASSWORD_ISSUED",
+      meta: {
+        reason: "ADMIN_RESET",
+      },
+      userId: user._id,
+    });
+
+    return {
+      temporaryPassword,
+      userId: user._id,
+    };
+  },
+});
+
 export const backfillAuthUserProfiles = mutation({
   args: {},
   returns: v.object({
