@@ -40,5 +40,11 @@ Progress terbaru yang sudah hidup:
 
 Remaining phase terdekat:
 
-1. Sandbox/review contract `custom_code`.
-2. Publish/downstream adapter ke `Superspace`.
+1. Publish/downstream adapter ke `Superspace`.
+2. Execution/publish contract `custom_code`.
+
+Progress tambahan yang sudah hidup:
+
+- `Agent Builder` backend sekarang punya review contract minimum untuk
+  `custom_code` di:
+  [api.ts](/home/rahman/projects/manef-db/convex/features/featureStore/api.ts)

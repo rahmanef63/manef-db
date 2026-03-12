@@ -77,8 +77,16 @@ builder dimulai.
     di [api.ts](/home/rahman/projects/manef-db/convex/features/featureStore/api.ts)
 - [ ] `json_blocks` harus bisa dirender ulang dari schema/metadata backend tanpa
   kehilangan struktur block.
-- [ ] `custom_code` harus punya metadata sandbox/review yang jelas, tidak cukup
+- [x] `custom_code` sekarang punya contract review/safety minimum, tidak lagi
   hanya blob string.
+  Bukti:
+  - `listAgentBuilderDrafts` sekarang mengembalikan `customCodeReport`
+  - `updateAgentBuilderDraft` menolak status `ready` jika review belum lengkap
+  - review minimum meliputi:
+    `scopeReviewed`, `secretSafe`, `networkReviewed`,
+    `runtimeWriteReviewed`
+  - file:
+    [api.ts](/home/rahman/projects/manef-db/convex/features/featureStore/api.ts)
 - [x] Setiap store item harus punya scope:
   `workspace`, `tenant`, `global`.
 - [x] Setiap store item harus bisa dikaitkan ke satu atau banyak workspace.
@@ -219,7 +227,17 @@ Progress terbaru untuk `Feature Store`:
   agent/workspace.
 - [ ] Publish/write-through ke downstream `Superspace` belum ada
 - [ ] Renderer `json_blocks` belum ada
-- [ ] Sandbox/review contract untuk `custom_code` masih minimal
+- [x] Sandbox/review contract minimum untuk `custom_code` sudah ada
+  di backend.
+  Bukti:
+  - helper evaluator custom code review di:
+    [api.ts](/home/rahman/projects/manef-db/convex/features/featureStore/api.ts)
+  - report yang dikembalikan:
+    `customCodeReport`
+  - status `ready` ditolak jika source kosong, entry file kosong,
+    review summary kosong, atau checklist review belum lengkap
+- [ ] Sandbox execution/publish contract `custom_code` ke downstream runtime/app
+  belum ada
 
 ## Auth portal extensions
 

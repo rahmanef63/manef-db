@@ -329,6 +329,49 @@ function buildDraftCapabilityReport(
     };
 }
 
+function buildCustomCodeReport(draft: any) {
+    const customCode = draft.outputConfig?.customCode ?? {};
+    const reviewChecklist = customCode.reviewChecklist ?? {};
+    const requiredChecklistKeys = [
+        "scopeReviewed",
+        "secretSafe",
+        "networkReviewed",
+        "runtimeWriteReviewed",
+    ];
+    const missingChecklistKeys = requiredChecklistKeys.filter(
+        (key) => reviewChecklist[key] !== true,
+    );
+    const sourceCode = typeof customCode.sourceCode === "string"
+        ? customCode.sourceCode.trim()
+        : "";
+    const entryFile = typeof customCode.entryFile === "string"
+        ? customCode.entryFile.trim()
+        : "";
+    const reviewSummary = typeof customCode.reviewSummary === "string"
+        ? customCode.reviewSummary.trim()
+        : "";
+    const hasSourceCode = sourceCode.length > 0;
+    const hasEntryFile = entryFile.length > 0;
+    const hasReviewSummary = reviewSummary.length > 0;
+
+    return {
+        language: typeof customCode.language === "string" ? customCode.language : undefined,
+        sourceLength: sourceCode.length,
+        hasSourceCode,
+        hasEntryFile,
+        hasReviewSummary,
+        missingChecklistKeys,
+        isReady:
+            draft.builderMode !== "custom_code" ||
+            (
+                hasSourceCode &&
+                hasEntryFile &&
+                hasReviewSummary &&
+                missingChecklistKeys.length === 0
+            ),
+    };
+}
+
 export const seedFeatureStoreCatalog = mutation({
     args: {},
     returns: v.object({
@@ -704,6 +747,15 @@ const draftReturnValidator = v.object({
         ),
         isReady: v.boolean(),
     }),
+    customCodeReport: v.object({
+        language: v.optional(v.string()),
+        sourceLength: v.number(),
+        hasSourceCode: v.boolean(),
+        hasEntryFile: v.boolean(),
+        hasReviewSummary: v.boolean(),
+        missingChecklistKeys: v.array(v.string()),
+        isReady: v.boolean(),
+    }),
 });
 
 function slugifyAppName(value: string) {
@@ -761,6 +813,7 @@ export const listAgentBuilderDrafts = query({
                 updatedAt: row.updatedAt,
                 archivedAt: row.archivedAt,
                 capabilityReport: buildDraftCapabilityReport(row, snapshot),
+                customCodeReport: buildCustomCodeReport(row),
             }));
     },
 });
@@ -881,6 +934,13 @@ export const updateAgentBuilderDraft = mutation({
             );
             if (!report.isReady) {
                 throw new Error("Draft capability requirements are not satisfied");
+            }
+            const customCodeReport = buildCustomCodeReport({
+                ...existing,
+                ...nextPayload,
+            });
+            if (!customCodeReport.isReady) {
+                throw new Error("Custom code review requirements are not satisfied");
             }
         }
         await ctx.db.patch(args.draftId, {

@@ -172,6 +172,10 @@ Progress terbaru:
     `requiredFeatureKeys`, `requiredSkillKeys`, linked agents/channels
   - evaluasi capability nyata:
     workspace features, workspace skills, available agents, dan gap skill per agent
+  - contract review minimum untuk `custom_code`:
+    `language`, `entryFile`, `sourceCode`, `reviewSummary`,
+    `reviewChecklist`
+  - `customCodeReport` untuk menentukan apakah draft aman ditandai `ready`
 - `workspaceTrees` sekarang juga menyimpan `featureKeys`:
   - daftar feature yang terpasang pada workspace tersebut
   - ikut dikembalikan oleh `openclawNavigator`
@@ -198,7 +202,7 @@ Remaining phase terdekat:
 - write-through/publish downstream untuk `Feature Store`
 - renderer/publish contract `Agent Builder`:
   `json_blocks`
-- sandbox/review contract `Agent Builder`:
+- sandbox execution/publish contract `Agent Builder`:
   `custom_code`
 - hardening RBAC untuk install/uninstall store items
 
