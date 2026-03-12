@@ -13,6 +13,12 @@ const authRegistrationStatus = v.union(
   v.literal("denied")
 );
 
+const authPasswordResetStatus = v.union(
+  v.literal("pending"),
+  v.literal("approved"),
+  v.literal("denied")
+);
+
 const authDeviceStatus = v.union(
   v.literal("approved"),
   v.literal("pending"),
@@ -32,6 +38,9 @@ const authAuditEvent = v.union(
   v.literal("REGISTRATION_REQUESTED"),
   v.literal("REGISTRATION_APPROVED"),
   v.literal("REGISTRATION_DENIED"),
+  v.literal("PASSWORD_RESET_REQUESTED"),
+  v.literal("PASSWORD_RESET_DENIED"),
+  v.literal("PASSWORD_RESET_APPROVED"),
   v.literal("TEMP_PASSWORD_ISSUED"),
   v.literal("PASSWORD_CHANGED")
 );
@@ -138,6 +147,27 @@ export const authSchema = {
     .index("by_phone", ["phone"])
     .index("by_profile", ["matchedProfileId"])
     .index("by_status", ["status"]),
+
+  authPasswordResetRequests: defineTable({
+    approvedAt: v.optional(v.float64()),
+    approvedBy: v.optional(v.string()),
+    authUserId: v.optional(v.id("authUsers")),
+    context: v.optional(v.string()),
+    createdAt: v.float64(),
+    deniedAt: v.optional(v.float64()),
+    deniedBy: v.optional(v.string()),
+    email: v.optional(v.string()),
+    identifier: v.string(),
+    matchedProfileId: v.optional(v.id("userProfiles")),
+    phone: v.optional(v.string()),
+    reviewNote: v.optional(v.string()),
+    status: authPasswordResetStatus,
+    temporaryPasswordIssuedAt: v.optional(v.float64()),
+    updatedAt: v.float64(),
+  })
+    .index("by_identifier", ["identifier"])
+    .index("by_status", ["status"])
+    .index("by_user", ["authUserId"]),
 
   authPolicies: defineTable({
     allowBootstrapAutoApprove: v.boolean(),

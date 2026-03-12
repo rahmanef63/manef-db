@@ -178,6 +178,20 @@ Progress terbaru untuk `Feature Store`:
 - [ ] Renderer `json_blocks` belum ada
 - [ ] Sandbox/review contract untuk `custom_code` masih minimal
 
+## Auth portal extensions
+
+- [x] Tambahkan antrean `password reset request` terpisah dari registrasi.
+  Bukti:
+  - schema:
+    `authPasswordResetRequests`
+    di [schema.ts](/home/rahman/projects/manef-db/convex/features/auth/schema.ts)
+  - mutation/query:
+    `submitPasswordResetRequest`,
+    `listPasswordResetRequests`,
+    `approvePasswordResetRequest`,
+    `denyPasswordResetRequest`
+    di [api.ts](/home/rahman/projects/manef-db/convex/features/auth/api.ts)
+
 ## Navigator model
 
 - [x] Pertahankan `userProfiles + workspaceTrees + workspaceAgents + agents`

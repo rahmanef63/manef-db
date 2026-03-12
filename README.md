@@ -172,6 +172,7 @@ Progress terbaru:
 - backend auth sekarang mendukung:
   - login `email/phone`
   - registration request
+  - forgot-password request
   - temporary password
   - first-login password change
 

@@ -143,6 +143,59 @@ function buildWorkspaceRootPath(userId: string) {
   return `/users/${userId}`;
 }
 
+async function resolveAuthUserByIdentifier(ctx: any, identifierInput: string) {
+  const identifier = parseIdentifier(identifierInput);
+  const profileByEmail =
+    identifier.email
+      ? await ctx.db
+          .query("userProfiles")
+          .withIndex("by_email", (q: any) => q.eq("email", identifier.email))
+          .first()
+      : null;
+  const profileByPhone =
+    identifier.phone
+      ? await ctx.db
+          .query("userProfiles")
+          .withIndex("by_phone", (q: any) => q.eq("phone", identifier.phone))
+          .first()
+      : null;
+  const resolvedProfile = profileByEmail ?? profileByPhone ?? null;
+
+  const authUser =
+    (identifier.email
+      ? await ctx.db
+          .query("authUsers")
+          .withIndex("by_email", (q: any) => q.eq("email", identifier.email))
+          .first()
+      : null) ??
+    (resolvedProfile?.email
+      ? await ctx.db
+          .query("authUsers")
+          .withIndex("by_email", (q: any) =>
+            q.eq("email", normalizeEmail(resolvedProfile.email!)),
+          )
+          .first()
+      : null) ??
+    (identifier.phone
+      ? await ctx.db
+          .query("authUsers")
+          .withIndex("by_phone", (q: any) => q.eq("phone", identifier.phone))
+          .first()
+      : null) ??
+    (resolvedProfile
+      ? await ctx.db
+          .query("authUsers")
+          .withIndex("by_profile", (q: any) => q.eq("profileId", resolvedProfile._id))
+          .first()
+      : null);
+
+  return {
+    authUser,
+    identifier,
+    resolvedProfile,
+  };
+}
+
 function generateTemporaryPassword() {
   return `${Math.floor(Math.random() * 1_000_000)}`.padStart(6, "0");
 }
@@ -214,6 +267,9 @@ async function createAuditLog(
       | "REGISTRATION_REQUESTED"
       | "REGISTRATION_APPROVED"
       | "REGISTRATION_DENIED"
+      | "PASSWORD_RESET_REQUESTED"
+      | "PASSWORD_RESET_DENIED"
+      | "PASSWORD_RESET_APPROVED"
       | "TEMP_PASSWORD_ISSUED"
       | "PASSWORD_CHANGED";
     meta?: Record<string, unknown>;
@@ -695,6 +751,203 @@ export const denyRegistrationRequest = mutation({
       event: "REGISTRATION_DENIED",
       meta: {
         phone: request.phone,
+        reason: args.reason?.trim() || undefined,
+        requestId: request._id,
+      },
+      userId: request.authUserId,
+    });
+    return null;
+  },
+});
+
+export const submitPasswordResetRequest = mutation({
+  args: {
+    context: v.optional(v.string()),
+    identifier: v.string(),
+  },
+  returns: v.object({
+    hasMatchedUser: v.boolean(),
+    requestId: v.id("authPasswordResetRequests"),
+  }),
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const identifier = args.identifier.trim();
+    const { authUser, resolvedProfile, identifier: parsed } =
+      await resolveAuthUserByIdentifier(ctx, identifier);
+
+    const requestId = await ctx.db.insert("authPasswordResetRequests", {
+      authUserId: authUser?._id,
+      context: args.context?.trim() || undefined,
+      createdAt: now,
+      email: parsed.email || authUser?.email || resolvedProfile?.email,
+      identifier,
+      matchedProfileId: resolvedProfile?._id,
+      phone: parsed.phone || authUser?.phone || resolvedProfile?.phone,
+      status: "pending",
+      updatedAt: now,
+    });
+
+    await createAuditLog(ctx, {
+      event: "PASSWORD_RESET_REQUESTED",
+      meta: {
+        hasMatchedUser: Boolean(authUser),
+        identifier,
+        requestId,
+      },
+      userId: authUser?._id,
+    });
+
+    return {
+      hasMatchedUser: Boolean(authUser),
+      requestId,
+    };
+  },
+});
+
+export const listPasswordResetRequests = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      _id: v.id("authPasswordResetRequests"),
+      authUserId: v.optional(v.id("authUsers")),
+      context: v.optional(v.string()),
+      createdAt: v.number(),
+      email: v.optional(v.string()),
+      hasMatchedUser: v.boolean(),
+      identifier: v.string(),
+      name: v.string(),
+      phone: v.optional(v.string()),
+      status: v.union(v.literal("pending"), v.literal("approved"), v.literal("denied")),
+      temporaryPasswordIssuedAt: v.optional(v.number()),
+      updatedAt: v.number(),
+    }),
+  ),
+  handler: async (ctx) => {
+    const requests = await ctx.db
+      .query("authPasswordResetRequests")
+      .withIndex("by_status", (q) => q.eq("status", "pending"))
+      .collect();
+    const approved = await ctx.db
+      .query("authPasswordResetRequests")
+      .withIndex("by_status", (q) => q.eq("status", "approved"))
+      .collect();
+    const denied = await ctx.db
+      .query("authPasswordResetRequests")
+      .withIndex("by_status", (q) => q.eq("status", "denied"))
+      .collect();
+    const all = [...requests, ...approved, ...denied].sort(
+      (left, right) => right.updatedAt - left.updatedAt,
+    );
+
+    const result = [];
+    for (const request of all) {
+      const authUser = request.authUserId ? await ctx.db.get(request.authUserId) : null;
+      const profile = request.matchedProfileId
+        ? await ctx.db.get(request.matchedProfileId)
+        : null;
+      result.push({
+        _id: request._id,
+        authUserId: request.authUserId,
+        context: request.context,
+        createdAt: request.createdAt,
+        email: request.email,
+        hasMatchedUser: Boolean(request.authUserId),
+        identifier: request.identifier,
+        name: authUser?.name ?? profile?.name ?? request.email ?? request.phone ?? request.identifier,
+        phone: request.phone,
+        status: request.status,
+        temporaryPasswordIssuedAt: request.temporaryPasswordIssuedAt,
+        updatedAt: request.updatedAt,
+      });
+    }
+    return result;
+  },
+});
+
+export const approvePasswordResetRequest = mutation({
+  args: {
+    requestId: v.id("authPasswordResetRequests"),
+  },
+  returns: v.object({
+    temporaryPassword: v.string(),
+    userId: v.id("authUsers"),
+  }),
+  handler: async (ctx, args) => {
+    const request = await ctx.db.get(args.requestId);
+    if (!request) {
+      throw new Error("Password reset request not found");
+    }
+    if (!request.authUserId) {
+      throw new Error("Password reset request has no matched user");
+    }
+    const user = await ctx.db.get(request.authUserId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const now = Date.now();
+    const temporaryPassword = generateTemporaryPassword();
+    const temporaryPasswordHash = await hashPassword(temporaryPassword);
+
+    await ctx.db.patch(user._id, {
+      mustChangePassword: true,
+      passwordHash: temporaryPasswordHash,
+      temporaryPasswordIssuedAt: now,
+      updatedAt: now,
+    });
+
+    await ctx.db.patch(request._id, {
+      approvedAt: now,
+      approvedBy: "admin",
+      status: "approved",
+      temporaryPasswordIssuedAt: now,
+      updatedAt: now,
+    });
+
+    await createAuditLog(ctx, {
+      event: "PASSWORD_RESET_APPROVED",
+      meta: {
+        requestId: request._id,
+      },
+      userId: user._id,
+    });
+    await createAuditLog(ctx, {
+      event: "TEMP_PASSWORD_ISSUED",
+      meta: {
+        reason: "PASSWORD_RESET_REQUEST",
+        requestId: request._id,
+      },
+      userId: user._id,
+    });
+
+    return {
+      temporaryPassword,
+      userId: user._id,
+    };
+  },
+});
+
+export const denyPasswordResetRequest = mutation({
+  args: {
+    reason: v.optional(v.string()),
+    requestId: v.id("authPasswordResetRequests"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const request = await ctx.db.get(args.requestId);
+    if (!request) {
+      throw new Error("Password reset request not found");
+    }
+    await ctx.db.patch(request._id, {
+      deniedAt: Date.now(),
+      deniedBy: "admin",
+      reviewNote: args.reason?.trim() || undefined,
+      status: "denied",
+      updatedAt: Date.now(),
+    });
+    await createAuditLog(ctx, {
+      event: "PASSWORD_RESET_DENIED",
+      meta: {
         reason: args.reason?.trim() || undefined,
         requestId: request._id,
       },
