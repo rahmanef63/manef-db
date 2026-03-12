@@ -204,6 +204,131 @@ async function syncWorkspaceFeatureKeys(
     await syncWorkspaceCapabilityPolicies(ctx, workspaceId, featureKeys);
 }
 
+async function getWorkspaceAgentIds(ctx: any, workspace: any) {
+    const links = await ctx.db
+        .query("workspaceAgents")
+        .withIndex("by_workspace", (q: any) => q.eq("workspaceId", workspace._id))
+        .collect();
+    return sortedUnique([
+        ...links.map((link: any) => link.agentId),
+        ...(workspace.agentId ? [workspace.agentId] : []),
+    ]);
+}
+
+async function buildWorkspaceCapabilitySnapshot(ctx: any, workspaceId: any) {
+    const workspace = await ctx.db.get(workspaceId);
+    if (!workspace) {
+        return {
+            workspace,
+            featureKeys: [],
+            grantedSkillKeys: [],
+            availableAgentIds: [],
+            agentSkillMap: new Map<string, string[]>(),
+            agentSourceMap: new Map<string, string[]>(),
+        };
+    }
+
+    const workspacePolicies = await ctx.db
+        .query("workspaceSkillPolicies")
+        .withIndex("by_workspace", (q: any) => q.eq("workspaceId", workspaceId))
+        .collect();
+    const agentPolicies = await ctx.db
+        .query("workspaceAgentSkillPolicies")
+        .withIndex("by_workspace", (q: any) => q.eq("workspaceId", workspaceId))
+        .collect();
+    const availableAgentIds = await getWorkspaceAgentIds(ctx, workspace);
+    const agentSkillMap = new Map<string, string[]>();
+    const agentSourceMap = new Map<string, string[]>();
+
+    for (const policy of agentPolicies) {
+        if (policy.status !== "active") {
+            continue;
+        }
+        agentSkillMap.set(policy.agentId, [
+            ...(agentSkillMap.get(policy.agentId) ?? []),
+            policy.skillKey,
+        ]);
+        agentSourceMap.set(policy.agentId, [
+            ...(agentSourceMap.get(policy.agentId) ?? []),
+            ...policy.sourceItemKeys,
+        ]);
+    }
+
+    return {
+        workspace,
+        featureKeys: sortedUnique(workspace.featureKeys ?? []),
+        grantedSkillKeys: sortedUnique(
+            workspacePolicies
+                .filter((policy: any) => policy.status === "active")
+                .map((policy: any) => policy.skillKey),
+        ),
+        availableAgentIds,
+        agentSkillMap: new Map(
+            Array.from(agentSkillMap.entries()).map(([agentId, skillKeys]) => [
+                agentId,
+                sortedUnique(skillKeys),
+            ]),
+        ),
+        agentSourceMap: new Map(
+            Array.from(agentSourceMap.entries()).map(([agentId, sourceItemKeys]) => [
+                agentId,
+                sortedUnique(sourceItemKeys),
+            ]),
+        ),
+    };
+}
+
+function buildDraftCapabilityReport(
+    draft: any,
+    snapshot: {
+        featureKeys: string[];
+        grantedSkillKeys: string[];
+        availableAgentIds: string[];
+        agentSkillMap: Map<string, string[]>;
+        agentSourceMap: Map<string, string[]>;
+    },
+) {
+    const requiredFeatureKeys = sortedUnique(draft.requiredFeatureKeys ?? []);
+    const requiredSkillKeys = sortedUnique(draft.requiredSkillKeys ?? []);
+    const linkedAgentIds = sortedUnique(draft.linkedAgentIds ?? []);
+    const missingFeatureKeys = requiredFeatureKeys.filter(
+        (featureKey) => !snapshot.featureKeys.includes(featureKey),
+    );
+    const missingWorkspaceSkillKeys = requiredSkillKeys.filter(
+        (skillKey) => !snapshot.grantedSkillKeys.includes(skillKey),
+    );
+    const unavailableAgentIds = linkedAgentIds.filter(
+        (agentId) => !snapshot.availableAgentIds.includes(agentId),
+    );
+    const agentCoverage = linkedAgentIds.map((agentId) => {
+        const agentSkillKeys = sortedUnique(snapshot.agentSkillMap.get(agentId) ?? []);
+        const missingSkillKeys = requiredSkillKeys.filter(
+            (skillKey) => !agentSkillKeys.includes(skillKey),
+        );
+        return {
+            agentId,
+            grantedSkillKeys: agentSkillKeys,
+            sourceItemKeys: sortedUnique(snapshot.agentSourceMap.get(agentId) ?? []),
+            missingSkillKeys,
+        };
+    });
+
+    return {
+        workspaceFeatureKeys: snapshot.featureKeys,
+        workspaceSkillKeys: snapshot.grantedSkillKeys,
+        availableAgentIds: snapshot.availableAgentIds,
+        missingFeatureKeys,
+        missingWorkspaceSkillKeys,
+        unavailableAgentIds,
+        agentCoverage,
+        isReady:
+            missingFeatureKeys.length === 0 &&
+            missingWorkspaceSkillKeys.length === 0 &&
+            unavailableAgentIds.length === 0 &&
+            agentCoverage.every((entry) => entry.missingSkillKeys.length === 0),
+    };
+}
+
 export const seedFeatureStoreCatalog = mutation({
     args: {},
     returns: v.object({
@@ -516,8 +641,8 @@ export const getWorkspaceCapabilityPolicy = query({
     }),
     handler: async (ctx, args) => {
         await assertWorkspaceAccess(ctx, args.workspaceId);
-        const workspace = await ctx.db.get(args.workspaceId);
-        if (!workspace) {
+        const snapshot = await buildWorkspaceCapabilitySnapshot(ctx, args.workspaceId);
+        if (!snapshot.workspace) {
             return {
                 workspaceId: args.workspaceId,
                 featureKeys: [],
@@ -526,46 +651,16 @@ export const getWorkspaceCapabilityPolicy = query({
             };
         }
 
-        const workspacePolicies = await ctx.db
-            .query("workspaceSkillPolicies")
-            .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-            .collect();
-        const agentPolicies = await ctx.db
-            .query("workspaceAgentSkillPolicies")
-            .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
-            .collect();
-        const groupedAgentPolicies = new Map<
-            string,
-            { skillKeys: string[]; sourceItemKeys: string[] }
-        >();
-
-        for (const policy of agentPolicies) {
-            if (policy.status !== "active") {
-                continue;
-            }
-            const existing = groupedAgentPolicies.get(policy.agentId) ?? {
-                skillKeys: [],
-                sourceItemKeys: [],
-            };
-            existing.skillKeys.push(policy.skillKey);
-            existing.sourceItemKeys.push(...policy.sourceItemKeys);
-            groupedAgentPolicies.set(policy.agentId, existing);
-        }
-
         return {
             workspaceId: args.workspaceId,
-            featureKeys: sortedUnique(workspace.featureKeys ?? []),
-            grantedSkillKeys: sortedUnique(
-                workspacePolicies
-                    .filter((policy) => policy.status === "active")
-                    .map((policy) => policy.skillKey),
-            ),
-            agentPolicies: Array.from(groupedAgentPolicies.entries())
+            featureKeys: snapshot.featureKeys,
+            grantedSkillKeys: snapshot.grantedSkillKeys,
+            agentPolicies: Array.from(snapshot.agentSkillMap.entries())
                 .sort(([left], [right]) => left.localeCompare(right, "en"))
                 .map(([agentId, value]) => ({
                     agentId,
-                    skillKeys: sortedUnique(value.skillKeys),
-                    sourceItemKeys: sortedUnique(value.sourceItemKeys),
+                    skillKeys: value,
+                    sourceItemKeys: sortedUnique(snapshot.agentSourceMap.get(agentId) ?? []),
                 })),
         };
     },
@@ -592,6 +687,23 @@ const draftReturnValidator = v.object({
     createdAt: v.number(),
     updatedAt: v.number(),
     archivedAt: v.optional(v.number()),
+    capabilityReport: v.object({
+        workspaceFeatureKeys: v.array(v.string()),
+        workspaceSkillKeys: v.array(v.string()),
+        availableAgentIds: v.array(v.string()),
+        missingFeatureKeys: v.array(v.string()),
+        missingWorkspaceSkillKeys: v.array(v.string()),
+        unavailableAgentIds: v.array(v.string()),
+        agentCoverage: v.array(
+            v.object({
+                agentId: v.string(),
+                grantedSkillKeys: v.array(v.string()),
+                sourceItemKeys: v.array(v.string()),
+                missingSkillKeys: v.array(v.string()),
+            }),
+        ),
+        isReady: v.boolean(),
+    }),
 });
 
 function slugifyAppName(value: string) {
@@ -622,6 +734,7 @@ export const listAgentBuilderDrafts = query({
                 .query("agentBuilderDrafts")
                 .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
                 .collect();
+        const snapshot = await buildWorkspaceCapabilitySnapshot(ctx, args.workspaceId);
 
         return rows
             .filter((row) => args.includeArchived || !row.archivedAt)
@@ -647,6 +760,7 @@ export const listAgentBuilderDrafts = query({
                 createdAt: row.createdAt,
                 updatedAt: row.updatedAt,
                 archivedAt: row.archivedAt,
+                capabilityReport: buildDraftCapabilityReport(row, snapshot),
             }));
     },
 });
@@ -673,6 +787,10 @@ export const createAgentBuilderDraft = mutation({
         const now = Date.now();
         const baseSlug = slugifyAppName(args.appSlug ?? args.name);
         const draftKey = `${args.itemKey}:${baseSlug}`;
+        const linkedAgentIds = sortedUnique(args.linkedAgentIds ?? []);
+        const linkedChannelKeys = sortedUnique(args.linkedChannelKeys ?? []);
+        const requiredFeatureKeys = sortedUnique(args.requiredFeatureKeys ?? []);
+        const requiredSkillKeys = sortedUnique(args.requiredSkillKeys ?? []);
         const existing = await ctx.db
             .query("agentBuilderDrafts")
             .withIndex("by_workspace_draftKey", (q) =>
@@ -690,10 +808,10 @@ export const createAgentBuilderDraft = mutation({
             builderMode: args.builderMode,
             status: "draft",
             source: "manual",
-            linkedAgentIds: args.linkedAgentIds,
-            linkedChannelKeys: args.linkedChannelKeys,
-            requiredFeatureKeys: args.requiredFeatureKeys,
-            requiredSkillKeys: args.requiredSkillKeys,
+            linkedAgentIds,
+            linkedChannelKeys,
+            requiredFeatureKeys,
+            requiredSkillKeys,
             previewConfig: args.previewConfig,
             outputConfig: args.outputConfig,
             downstreamTarget: args.downstreamTarget,
@@ -735,19 +853,48 @@ export const updateAgentBuilderDraft = mutation({
             throw new Error("Draft not found");
         }
         await assertWorkspaceAccess(ctx, existing.workspaceId, { adminOnly: true });
-        const nextStatus = args.status ?? existing.status;
-        await ctx.db.patch(args.draftId, {
+        const nextPayload = {
             name: args.name?.trim() ?? existing.name,
             description: args.description?.trim() ?? existing.description,
             appSlug: args.appSlug ? slugifyAppName(args.appSlug) : existing.appSlug,
-            status: nextStatus,
-            linkedAgentIds: args.linkedAgentIds ?? existing.linkedAgentIds,
-            linkedChannelKeys: args.linkedChannelKeys ?? existing.linkedChannelKeys,
-            requiredFeatureKeys: args.requiredFeatureKeys ?? existing.requiredFeatureKeys,
-            requiredSkillKeys: args.requiredSkillKeys ?? existing.requiredSkillKeys,
+            linkedAgentIds: sortedUnique(args.linkedAgentIds ?? existing.linkedAgentIds ?? []),
+            linkedChannelKeys: sortedUnique(args.linkedChannelKeys ?? existing.linkedChannelKeys ?? []),
+            requiredFeatureKeys: sortedUnique(
+                args.requiredFeatureKeys ?? existing.requiredFeatureKeys ?? [],
+            ),
+            requiredSkillKeys: sortedUnique(
+                args.requiredSkillKeys ?? existing.requiredSkillKeys ?? [],
+            ),
             previewConfig: args.previewConfig ?? existing.previewConfig,
             outputConfig: args.outputConfig ?? existing.outputConfig,
             downstreamTarget: args.downstreamTarget ?? existing.downstreamTarget,
+        };
+        const nextStatus = args.status ?? existing.status;
+        if (nextStatus === "ready") {
+            const snapshot = await buildWorkspaceCapabilitySnapshot(ctx, existing.workspaceId);
+            const report = buildDraftCapabilityReport(
+                {
+                    ...existing,
+                    ...nextPayload,
+                },
+                snapshot,
+            );
+            if (!report.isReady) {
+                throw new Error("Draft capability requirements are not satisfied");
+            }
+        }
+        await ctx.db.patch(args.draftId, {
+            name: nextPayload.name,
+            description: nextPayload.description,
+            appSlug: nextPayload.appSlug,
+            status: nextStatus,
+            linkedAgentIds: nextPayload.linkedAgentIds,
+            linkedChannelKeys: nextPayload.linkedChannelKeys,
+            requiredFeatureKeys: nextPayload.requiredFeatureKeys,
+            requiredSkillKeys: nextPayload.requiredSkillKeys,
+            previewConfig: nextPayload.previewConfig,
+            outputConfig: nextPayload.outputConfig,
+            downstreamTarget: nextPayload.downstreamTarget,
             archivedAt: nextStatus === "archived" ? Date.now() : undefined,
             updatedAt: Date.now(),
         });

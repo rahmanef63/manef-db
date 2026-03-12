@@ -40,6 +40,6 @@ Progress terbaru yang sudah hidup:
 
 Remaining phase terdekat:
 
-1. Hardening policy nyata `workspace -> agents -> skills` untuk source `skill_store`.
-2. `Agent Builder` backend contract dan capability output.
+1. Preview minimal `Agent Builder` untuk output `json_blocks`.
+2. Sandbox/review contract `custom_code`.
 3. Publish/downstream adapter ke `Superspace`.

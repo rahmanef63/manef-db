@@ -115,6 +115,17 @@ builder dimulai.
   - file:
     [schema.ts](/home/rahman/projects/manef-db/convex/features/featureStore/schema.ts)
     [api.ts](/home/rahman/projects/manef-db/convex/features/featureStore/api.ts)
+- [x] `Agent Builder` draft sekarang punya evaluasi capability nyata terhadap
+  workspace dan agent target.
+  Bukti:
+  - helper snapshot:
+    `buildWorkspaceCapabilitySnapshot`
+  - evaluator draft:
+    `buildDraftCapabilityReport`
+  - query draft sekarang mengembalikan `capabilityReport`
+  - status `ready` sekarang ditolak backend jika capability belum terpenuhi
+  - file:
+    [api.ts](/home/rahman/projects/manef-db/convex/features/featureStore/api.ts)
 - [ ] Backend harus siap menyimpan metadata target integrasi `Superspace`.
 
 Konteks integrasi eksternal:

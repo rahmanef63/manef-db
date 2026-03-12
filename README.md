@@ -170,6 +170,8 @@ Progress terbaru:
   - create/update/archive API
   - contract output minimum:
     `requiredFeatureKeys`, `requiredSkillKeys`, linked agents/channels
+  - evaluasi capability nyata:
+    workspace features, workspace skills, available agents, dan gap skill per agent
 - `workspaceTrees` sekarang juga menyimpan `featureKeys`:
   - daftar feature yang terpasang pada workspace tersebut
   - ikut dikembalikan oleh `openclawNavigator`
