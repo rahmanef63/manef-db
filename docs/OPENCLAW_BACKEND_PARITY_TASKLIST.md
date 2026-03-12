@@ -1,6 +1,6 @@
 # OpenClaw Backend Parity Tasklist
 
-Updated: 2026-03-11
+Updated: 2026-03-12
 
 Dokumen ini melacak pekerjaan `manef-db` agar menjadi backend mirror yang
 konsisten terhadap runtime OpenClaw, sekaligus melayani `manef-ui`.
@@ -50,7 +50,14 @@ Konteks ini belum selesai dan belum menjadi contract backend resmi, tetapi harus
 diakomodasi mulai sekarang agar model data tidak buntu saat integrasi app
 builder dimulai.
 
-- [ ] Tambahkan model backend untuk `feature store items`.
+- [x] Tambahkan model backend untuk `feature store items`.
+  Bukti:
+  - schema:
+    [schema.ts](/home/rahman/projects/manef-db/convex/features/featureStore/schema.ts)
+  - seed catalog:
+    [catalog.ts](/home/rahman/projects/manef-db/convex/features/featureStore/catalog.ts)
+  - API:
+    [api.ts](/home/rahman/projects/manef-db/convex/features/featureStore/api.ts)
 - [ ] Bedakan item store:
   `workspace-app`, `agent-builder`, `shared-block-set`, `template`, `external app`.
 - [ ] `Agent Builder` harus menyimpan dua mode source:
@@ -59,9 +66,15 @@ builder dimulai.
   kehilangan struktur block.
 - [ ] `custom_code` harus punya metadata sandbox/review yang jelas, tidak cukup
   hanya blob string.
-- [ ] Setiap store item harus punya scope:
+- [x] Setiap store item harus punya scope:
   `workspace`, `tenant`, `global`.
-- [ ] Setiap store item harus bisa dikaitkan ke satu atau banyak workspace.
+- [x] Setiap store item harus bisa dikaitkan ke satu atau banyak workspace.
+  Bukti:
+  - install table:
+    `workspaceFeatureInstalls`
+  - mutation:
+    `installFeatureStoreItem`, `uninstallFeatureStoreItem`
+    di [api.ts](/home/rahman/projects/manef-db/convex/features/featureStore/api.ts)
 - [ ] Backend harus siap menyimpan metadata target integrasi `Superspace`.
 
 Konteks integrasi eksternal:
@@ -122,6 +135,19 @@ Implikasi untuk `manef-db`:
   dengan menu installer biasa
 - model backend `manef` tidak boleh meniru Superspace mentah-mentah; dia tetap
   harus `workspace + agent + runtime OpenClaw aware`
+
+Progress terbaru untuk `Feature Store`:
+
+- [x] Query katalog store live:
+  `listFeatureStoreItems`
+- [x] Preview metadata backend:
+  `featureStorePreviews`
+- [x] Seed katalog backend:
+  `seedFeatureStoreCatalog`
+- [x] Install/uninstall item per workspace:
+  `workspaceFeatureInstalls`
+- [ ] RBAC backend untuk install/uninstall masih perlu diperketat
+- [ ] Publish/write-through ke downstream `Superspace` belum ada
 
 ## Navigator model
 

@@ -1,6 +1,6 @@
 # Docs Index
 
-Updated: 2026-03-11
+Updated: 2026-03-12
 
 Dokumen aktif untuk repo ini:
 
@@ -28,3 +28,18 @@ Dokumen ini menetapkan boundary:
 - `Superspace` = acuan product shell
 - `OpenClaw` = runtime SSOT
 - `manef-db` = integration backend
+
+Progress terbaru yang sudah hidup:
+
+- runtime mirror `agents`, `sessions`, `config`, `crons`, `skills`, `channels`, `logs`
+- binding `channel/account -> workspace` dan `identity -> workspace`
+- `Feature Store` backend:
+  - `featureStoreItems`
+  - `featureStorePreviews`
+  - `workspaceFeatureInstalls`
+
+Remaining phase terdekat:
+
+1. Hardening RBAC install/uninstall `Feature Store`.
+2. `Agent Builder` backend contract.
+3. Publish/downstream adapter ke `Superspace`.

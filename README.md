@@ -148,6 +148,10 @@ Progress terbaru:
 
 - binding `channel/account -> workspace` sekarang sudah termirror dari runtime
 - binding `userIdentity -> workspace` sekarang sudah termirror dari runtime
+- `Feature Store` backend sekarang sudah punya:
+  - catalog schema
+  - preview metadata
+  - install/uninstall per workspace
 - backend auth sekarang mendukung:
   - login `email/phone`
   - registration request
@@ -156,10 +160,10 @@ Progress terbaru:
 
 Remaining phase terdekat:
 
-- write-through lokal untuk binding manual ke runtime OpenClaw
-- kebijakan apakah satu channel boleh multi-workspace atau single primary workspace
-- schema/backend `Feature Store`
-- schema/backend `Agent Builder`
+- write-through/publish downstream untuk `Feature Store`
+- `Agent Builder` backend:
+  `json_blocks` dan `custom_code`
+- hardening RBAC untuk install/uninstall store items
 
 Admin write surface yang sudah siap:
 

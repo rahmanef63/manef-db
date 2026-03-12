@@ -23,6 +23,7 @@ import { configSchema } from "./features/config/schema";
 import { debugSchema } from "./features/debug/schema";
 import { logsSchema } from "./features/logs/schema";
 import { usageSchema } from "./features/usage/schema";
+import { featureStoreSchema } from "./features/featureStore/schema";
 
 // Example: 7 day soft deletion period for workspaces
 // todo: Unused constant in schema - remove or implement scheduled deletion
@@ -132,6 +133,7 @@ const schema = defineSchema({
   ...debugSchema,
   ...logsSchema,
   ...usageSchema,
+  ...featureStoreSchema,
 });
 
 export default schema;

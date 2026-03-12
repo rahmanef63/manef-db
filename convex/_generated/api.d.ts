@@ -18,6 +18,8 @@ import type * as features_core_api from "../features/core/api.js";
 import type * as features_crons_api from "../features/crons/api.js";
 import type * as features_dashboard_api from "../features/dashboard/api.js";
 import type * as features_debug_api from "../features/debug/api.js";
+import type * as features_featureStore_api from "../features/featureStore/api.js";
+import type * as features_featureStore_catalog from "../features/featureStore/catalog.js";
 import type * as features_inbox_api from "../features/inbox/api.js";
 import type * as features_instances_api from "../features/instances/api.js";
 import type * as features_knowledge_api from "../features/knowledge/api.js";
@@ -68,6 +70,8 @@ declare const fullApi: ApiFromModules<{
   "features/crons/api": typeof features_crons_api;
   "features/dashboard/api": typeof features_dashboard_api;
   "features/debug/api": typeof features_debug_api;
+  "features/featureStore/api": typeof features_featureStore_api;
+  "features/featureStore/catalog": typeof features_featureStore_catalog;
   "features/inbox/api": typeof features_inbox_api;
   "features/instances/api": typeof features_instances_api;
   "features/knowledge/api": typeof features_knowledge_api;
