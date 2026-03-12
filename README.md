@@ -161,6 +161,10 @@ Progress terbaru:
     `by Rahman`, `by ClawHub`, `by OpenClaw`
   - metadata `trust`, `scope`, `install state`, `homepage`
   - query status store untuk ringkasan inventory
+  - query workspace-aware untuk policy grant:
+    `listSkills({ workspaceId })`
+  - mutation manual grant/revoke:
+    `setWorkspaceSkillPolicy`
 - `Agent Builder` backend sekarang sudah punya:
   - draft schema per workspace
   - create/update/archive API
@@ -190,7 +194,6 @@ Remaining phase terdekat:
   `json_blocks`
 - sandbox/review contract `Agent Builder`:
   `custom_code`
-- turunkan `Skills Store` menjadi policy skill/capability agent per workspace
 - hardening RBAC untuk install/uninstall store items
 
 Skills Store note:

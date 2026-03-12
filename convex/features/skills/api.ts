@@ -1,6 +1,27 @@
 import { query, mutation, action } from "../../_generated/server";
 import { v } from "convex/values";
 
+function sortedUnique(values: string[]) {
+    return Array.from(new Set(values.filter(Boolean))).sort((left, right) =>
+        left.localeCompare(right, "en"),
+    );
+}
+
+async function getWorkspaceAgentIds(ctx: any, workspaceId: any) {
+    const workspace = await ctx.db.get(workspaceId);
+    if (!workspace) {
+        return [];
+    }
+    const links = await ctx.db
+        .query("workspaceAgents")
+        .withIndex("by_workspace", (q: any) => q.eq("workspaceId", workspaceId))
+        .collect();
+    return sortedUnique([
+        ...links.map((link: any) => link.agentId),
+        ...(workspace.agentId ? [workspace.agentId] : []),
+    ]);
+}
+
 /**
  * List all skills, optionally filtered by source.
  */
@@ -9,6 +30,7 @@ export const listSkills = query({
         source: v.optional(v.string()),
         sourceType: v.optional(v.string()),
         filter: v.optional(v.string()),
+        workspaceId: v.optional(v.id("workspaceTrees")),
     },
     returns: v.array(
         v.object({
@@ -30,6 +52,9 @@ export const listSkills = query({
             hasManualOverride: v.optional(v.boolean()),
             version: v.optional(v.string()),
             toolCount: v.optional(v.number()),
+            workspacePolicyEnabled: v.optional(v.boolean()),
+            workspacePolicySources: v.optional(v.array(v.string())),
+            workspaceAssignedAgentCount: v.optional(v.number()),
         })
     ),
     handler: async (ctx, args) => {
@@ -58,6 +83,36 @@ export const listSkills = query({
                     (s.description && s.description.toLowerCase().includes(f))
             );
         }
+        const workspacePolicies = args.workspaceId
+            ? await ctx.db
+                .query("workspaceSkillPolicies")
+                .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId!))
+                .collect()
+            : [];
+        const workspacePolicyMap = new Map<string, string[]>();
+        for (const policy of workspacePolicies) {
+            if (policy.status !== "active") {
+                continue;
+            }
+            const next = workspacePolicyMap.get(policy.skillKey) ?? [];
+            next.push(policy.source);
+            workspacePolicyMap.set(policy.skillKey, next);
+        }
+        const workspaceAgentPolicies = args.workspaceId
+            ? await ctx.db
+                .query("workspaceAgentSkillPolicies")
+                .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId!))
+                .collect()
+            : [];
+        const workspaceAgentCountMap = new Map<string, Set<string>>();
+        for (const policy of workspaceAgentPolicies) {
+            if (policy.status !== "active") {
+                continue;
+            }
+            const next = workspaceAgentCountMap.get(policy.skillKey) ?? new Set<string>();
+            next.add(policy.agentId);
+            workspaceAgentCountMap.set(policy.skillKey, next);
+        }
         return skills.map((s) => ({
             _id: s._id,
             _creationTime: s._creationTime,
@@ -77,6 +132,15 @@ export const listSkills = query({
             hasManualOverride: s.config?.manualOverrideEnabled !== undefined,
             version: s.version,
             toolCount: s.toolCount,
+            workspacePolicyEnabled: args.workspaceId
+                ? workspacePolicyMap.has(s.skillId)
+                : undefined,
+            workspacePolicySources: args.workspaceId
+                ? sortedUnique(workspacePolicyMap.get(s.skillId) ?? [])
+                : undefined,
+            workspaceAssignedAgentCount: args.workspaceId
+                ? (workspaceAgentCountMap.get(s.skillId)?.size ?? 0)
+                : undefined,
         }));
     },
 });
@@ -102,6 +166,100 @@ export const toggleSkill = mutation({
             },
             updatedAt: Date.now(),
         });
+        return null;
+    },
+});
+
+export const setWorkspaceSkillPolicy = mutation({
+    args: {
+        workspaceId: v.id("workspaceTrees"),
+        skillId: v.id("skills"),
+        enabled: v.boolean(),
+        agentIds: v.optional(v.array(v.string())),
+    },
+    returns: v.null(),
+    handler: async (ctx, args) => {
+        const skill = await ctx.db.get(args.skillId);
+        if (!skill) {
+            return null;
+        }
+        const now = Date.now();
+        const targetAgentIds = sortedUnique(
+            args.agentIds?.length ? args.agentIds : await getWorkspaceAgentIds(ctx, args.workspaceId),
+        );
+        const skillKey = skill.skillId;
+        const existingWorkspacePolicies = await ctx.db
+            .query("workspaceSkillPolicies")
+            .withIndex("by_workspace_skillKey", (q) =>
+                q.eq("workspaceId", args.workspaceId).eq("skillKey", skillKey),
+            )
+            .collect();
+        const manualWorkspacePolicy = existingWorkspacePolicies.find(
+            (row) => row.source === "skill_store",
+        );
+        if (args.enabled) {
+            const workspacePayload = {
+                workspaceId: args.workspaceId,
+                skillKey,
+                source: "skill_store",
+                sourceItemKeys: [skill.skillId],
+                status: "active",
+                updatedAt: now,
+            };
+            if (manualWorkspacePolicy) {
+                await ctx.db.patch(manualWorkspacePolicy._id, workspacePayload);
+            } else {
+                await ctx.db.insert("workspaceSkillPolicies", {
+                    ...workspacePayload,
+                    createdAt: now,
+                });
+            }
+        } else if (manualWorkspacePolicy) {
+            await ctx.db.delete(manualWorkspacePolicy._id);
+        }
+
+        const existingAgentPolicies = await ctx.db
+            .query("workspaceAgentSkillPolicies")
+            .withIndex("by_workspace", (q) => q.eq("workspaceId", args.workspaceId))
+            .collect();
+        const manualAgentPolicies = existingAgentPolicies.filter(
+            (row) => row.source === "skill_store" && row.skillKey === skillKey,
+        );
+        if (!args.enabled) {
+            for (const row of manualAgentPolicies) {
+                await ctx.db.delete(row._id);
+            }
+            return null;
+        }
+
+        const manualAgentPolicyMap = new Map(
+            manualAgentPolicies.map((row) => [row.agentId, row]),
+        );
+        for (const row of manualAgentPolicies) {
+            if (!targetAgentIds.includes(row.agentId)) {
+                await ctx.db.delete(row._id);
+            }
+        }
+        for (const agentId of targetAgentIds) {
+            const payload = {
+                workspaceId: args.workspaceId,
+                agentId,
+                skillKey,
+                source: "skill_store",
+                sourceItemKeys: [skill.skillId],
+                status: "active",
+                updatedAt: now,
+            };
+            const existing = manualAgentPolicyMap.get(agentId);
+            if (existing) {
+                await ctx.db.patch(existing._id, payload);
+            } else {
+                await ctx.db.insert("workspaceAgentSkillPolicies", {
+                    ...payload,
+                    createdAt: now,
+                });
+            }
+        }
         return null;
     },
 });

@@ -47,10 +47,12 @@ async function syncWorkspaceCapabilityPolicies(
     }
 
     const effectiveSkillKeys = sortedUnique(Array.from(skillSources.keys()));
-    const existingWorkspacePolicies = await ctx.db
+    const existingWorkspacePolicies = (
+        await ctx.db
         .query("workspaceSkillPolicies")
         .withIndex("by_workspace", (q: any) => q.eq("workspaceId", workspaceId))
-        .collect();
+        .collect()
+    ).filter((row: any) => row.source === "feature_install");
     const existingWorkspacePolicyMap = new Map<string, any>(
         existingWorkspacePolicies.map((row: any) => [row.skillKey, row]),
     );
@@ -90,10 +92,12 @@ async function syncWorkspaceCapabilityPolicies(
         ...links.map((link: any) => link.agentId),
         ...(workspace.agentId ? [workspace.agentId] : []),
     ]);
-    const existingAgentPolicies = await ctx.db
+    const existingAgentPolicies = (
+        await ctx.db
         .query("workspaceAgentSkillPolicies")
         .withIndex("by_workspace", (q: any) => q.eq("workspaceId", workspaceId))
-        .collect();
+        .collect()
+    ).filter((row: any) => row.source === "feature_install");
     const keepKeys = new Set(
         agentIds.flatMap((agentId) =>
             effectiveSkillKeys.map((skillKey) => `${agentId}::${skillKey}`),

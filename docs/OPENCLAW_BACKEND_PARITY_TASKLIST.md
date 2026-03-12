@@ -624,6 +624,18 @@ Definition of done:
   - `syncRuntimeSkills` menjaga override tetap hidup sambil menyimpan
     `config.runtimeEnabled`
   - [api.ts](/home/rahman/projects/manef-db/convex/features/skills/api.ts)
+- [x] Turunkan `Skills Store` menjadi policy nyata
+  `workspace -> skills -> agents`.
+  Bukti:
+  - query `listSkills` sekarang bisa menerima `workspaceId` dan mengembalikan
+    `workspacePolicyEnabled`, `workspacePolicySources`,
+    `workspaceAssignedAgentCount`
+  - mutation baru:
+    `setWorkspaceSkillPolicy`
+  - policy manual `skill_store` ditulis ke tabel capability yang sama:
+    `workspaceSkillPolicies`, `workspaceAgentSkillPolicies`
+  - file:
+    [api.ts](/home/rahman/projects/manef-db/convex/features/skills/api.ts)
 
 Definition of done:
 
@@ -633,6 +645,7 @@ Definition of done:
 - source label dan metadata trust/scope tersedia untuk `Skills Store`
 - jika metadata `ClawHub` muncul di host, backend bisa memetakannya tanpa
   perubahan schema baru
+- policy skill manual dari store ikut terbaca oleh query capability workspace
 
 ## Config
 

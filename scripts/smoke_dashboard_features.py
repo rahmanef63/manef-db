@@ -103,6 +103,23 @@ def main() -> int:
         isinstance(capability_policy, dict),
         "workspace capability policy response must be an object",
     )
+    workspace_scoped_skills = (
+        run_convex(
+            "features/skills/api:listSkills",
+            {"workspaceId": roots[0]["_id"]},
+        )
+        if roots
+        else []
+    )
+    require(
+        isinstance(workspace_scoped_skills, list),
+        "workspace scoped skills response must be a list",
+    )
+    if workspace_scoped_skills:
+        require(
+            "workspacePolicyEnabled" in workspace_scoped_skills[0],
+            "workspace scoped skills must expose workspace policy status",
+        )
 
     logs = run_convex("features/logs/api:getRecentLogs", {"limit": 5})
     require(isinstance(logs, list), "logs response must be a list")
