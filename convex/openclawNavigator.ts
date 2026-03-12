@@ -22,6 +22,12 @@ function uniqueAgentIds(agentIds: string[]) {
   return Array.from(new Set(agentIds.filter(Boolean)));
 }
 
+function sortedUnique(values: string[]) {
+  return Array.from(new Set(values.filter(Boolean))).sort((left, right) =>
+    left.localeCompare(right, "en"),
+  );
+}
+
 function scopeSlugForTree(tree: {
   _id: string;
   agentId?: string | null;
@@ -138,6 +144,7 @@ export const listScopes = query({
     ).flat();
 
     const workspaceAgentLinks = await ctx.db.query("workspaceAgents").collect();
+    const featureStoreItems = await ctx.db.query("featureStoreItems").collect();
     const workspaceFeatureInstalls = await ctx.db
       .query("workspaceFeatureInstalls")
       .collect();
@@ -151,14 +158,26 @@ export const listScopes = query({
       next.push(link);
       agentLinksByWorkspace.set(key, next);
     }
+    const featureStoreItemByKey = new Map(
+      featureStoreItems.map((item) => [item.itemKey, item]),
+    );
+    const validDashboardFeatureKeys = new Set(
+      featureStoreItems
+        .filter((item) => item.itemType === "dashboard-feature" && item.featureKey)
+        .map((item) => item.featureKey as string),
+    );
     const featureKeysByWorkspace = new Map<string, string[]>();
     for (const install of workspaceFeatureInstalls) {
       if (install.installState === "uninstalled") {
         continue;
       }
+      const item = featureStoreItemByKey.get(install.itemKey);
+      if (!item || item.itemType !== "dashboard-feature" || !item.featureKey) {
+        continue;
+      }
       const key = install.workspaceId as string;
       const next = featureKeysByWorkspace.get(key) ?? [];
-      next.push(install.itemKey);
+      next.push(item.featureKey);
       featureKeysByWorkspace.set(key, next);
     }
 
@@ -227,12 +246,12 @@ export const listScopes = query({
     const featureKeysForTree = (
       tree: (typeof workspaceTrees)[number],
     ): string[] => {
-      return Array.from(
-        new Set([
-          ...(tree.featureKeys ?? []),
+      return sortedUnique([
+          ...(tree.featureKeys ?? []).filter((featureKey) =>
+            validDashboardFeatureKeys.has(featureKey),
+          ),
           ...(featureKeysByWorkspace.get(tree._id as string) ?? []),
-        ]),
-      ).sort((left, right) => left.localeCompare(right, "en"));
+        ]);
     };
 
     const rawRoots = workspaceTrees

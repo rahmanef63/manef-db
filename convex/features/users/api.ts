@@ -39,17 +39,30 @@ export const getUsers = query({
     ),
     handler: async (ctx) => {
         const users = await ctx.db.query("authUsers").order("desc").take(100);
+        const featureStoreItems = await ctx.db.query("featureStoreItems").collect();
         const workspaceFeatureInstalls = await ctx.db
             .query("workspaceFeatureInstalls")
             .collect();
+        const featureStoreItemByKey = new Map(
+            featureStoreItems.map((item) => [item.itemKey, item]),
+        );
+        const validDashboardFeatureKeys = new Set(
+            featureStoreItems
+                .filter((item) => item.itemType === "dashboard-feature" && item.featureKey)
+                .map((item) => item.featureKey as string),
+        );
         const featureKeysByWorkspace = new Map<string, string[]>();
         for (const install of workspaceFeatureInstalls) {
             if (install.installState === "uninstalled") {
                 continue;
             }
+            const item = featureStoreItemByKey.get(install.itemKey);
+            if (!item || item.itemType !== "dashboard-feature" || !item.featureKey) {
+                continue;
+            }
             const key = install.workspaceId as string;
             const next = featureKeysByWorkspace.get(key) ?? [];
-            next.push(install.itemKey);
+            next.push(item.featureKey);
             featureKeysByWorkspace.set(key, next);
         }
 
@@ -77,7 +90,9 @@ export const getUsers = query({
                     .map((workspace) => ({
                         featureKeys: Array.from(
                             new Set([
-                                ...(workspace.featureKeys ?? []),
+                                ...(workspace.featureKeys ?? []).filter((featureKey) =>
+                                    validDashboardFeatureKeys.has(featureKey),
+                                ),
                                 ...(featureKeysByWorkspace.get(workspace._id as string) ?? []),
                             ]),
                         ).sort((left, right) => left.localeCompare(right, "en")),
