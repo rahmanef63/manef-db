@@ -76,3 +76,30 @@ def redact_config(value: Any) -> Any:
 
 def print_summary(name: str, payload: Any) -> None:
     print(json.dumps({"sync": name, "result": payload}, ensure_ascii=False))
+    # Record audit entry in Convex (best-effort, non-blocking)
+    try:
+        audit_args: dict[str, Any] = {
+            "domain": name,
+            "status": "ok" if payload else "partial",
+            "tenantId": TENANT_ID,
+        }
+        if isinstance(payload, dict):
+            for field in ("inserted", "updated", "unchanged", "deleted", "upserted", "failed"):
+                if field in payload:
+                    audit_args[field] = payload[field]
+        run_convex("features/debug/api:recordSyncAudit", audit_args)
+    except Exception:
+        pass  # Audit is best-effort; never block main sync on failure
+
+
+def record_sync_error(name: str, error: Exception) -> None:
+    """Record a failed sync run in the audit log."""
+    try:
+        run_convex("features/debug/api:recordSyncAudit", {
+            "domain": name,
+            "status": "error",
+            "error": str(error),
+            "tenantId": TENANT_ID,
+        })
+    except Exception:
+        pass

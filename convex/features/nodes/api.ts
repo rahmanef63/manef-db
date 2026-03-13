@@ -190,6 +190,50 @@ export const removeNodeBinding = mutation({
 });
 
 /**
+ * Bulk-sync nodes from OpenClaw runtime (gateway + paired nodes).
+ */
+export const syncRuntimeNodes = mutation({
+    args: {
+        nodes: v.array(
+            v.object({
+                nodeId: v.string(),
+                name: v.string(),
+                host: v.string(),
+                online: v.boolean(),
+                capabilities: v.optional(v.array(v.string())),
+                platform: v.optional(v.string()),
+                lastSeenAt: v.optional(v.number()),
+                tenantId: v.optional(v.string()),
+            })
+        ),
+    },
+    returns: v.object({ upserted: v.number() }),
+    handler: async (ctx, args) => {
+        const now = Date.now();
+        let upserted = 0;
+        for (const node of args.nodes) {
+            const existing = await ctx.db
+                .query("nodes")
+                .withIndex("by_nodeId", (q) => q.eq("nodeId", node.nodeId))
+                .first();
+            const payload = {
+                ...node,
+                lastSeenAt: node.lastSeenAt ?? now,
+                createdAt: existing?.createdAt ?? now,
+                updatedAt: now,
+            };
+            if (existing) {
+                await ctx.db.patch(existing._id, payload);
+            } else {
+                await ctx.db.insert("nodes", payload);
+            }
+            upserted++;
+        }
+        return { upserted };
+    },
+});
+
+/**
  * Refresh nodes from gateway.
  */
 export const refreshNodes = action({

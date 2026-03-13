@@ -54,7 +54,8 @@
     "sync:runtime:crons": "python3 scripts/sync_openclaw_crons_to_convex.py",
     "sync:runtime:skills": "python3 scripts/sync_openclaw_skills_to_convex.py",
     "sync:runtime:channels": "python3 scripts/sync_openclaw_channels_to_convex.py",
-    "sync:runtime:logs": "python3 scripts/sync_openclaw_logs_to_convex.py"
+    "sync:runtime:logs": "python3 scripts/sync_openclaw_logs_to_convex.py",
+    "sync:runtime:nodes": "python3 scripts/sync_openclaw_nodes_to_convex.py"
   },
   "dependencies": {
     "convex": "^1.31.6",

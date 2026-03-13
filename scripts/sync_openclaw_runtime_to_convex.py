@@ -17,6 +17,7 @@ SCRIPTS = [
     "sync_openclaw_skills_to_convex.py",
     "sync_openclaw_channels_to_convex.py",
     "sync_openclaw_logs_to_convex.py",
+    "sync_openclaw_nodes_to_convex.py",
 ]
 
 

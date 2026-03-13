@@ -116,3 +116,94 @@ export const refreshSnapshots = action({
         return null;
     },
 });
+
+/**
+ * Record a sync audit entry after a runtime sync run.
+ */
+export const recordSyncAudit = mutation({
+    args: {
+        domain: v.string(),
+        inserted: v.optional(v.number()),
+        updated: v.optional(v.number()),
+        unchanged: v.optional(v.number()),
+        deleted: v.optional(v.number()),
+        upserted: v.optional(v.number()),
+        failed: v.optional(v.number()),
+        error: v.optional(v.string()),
+        status: v.string(),
+        tenantId: v.optional(v.string()),
+    },
+    returns: v.id("syncAuditLog"),
+    handler: async (ctx, args) => {
+        // Keep only last 500 audit entries per domain to prevent unbounded growth
+        const old = await ctx.db
+            .query("syncAuditLog")
+            .withIndex("by_domain", (q) => q.eq("domain", args.domain))
+            .order("asc")
+            .take(1);
+        const count = await ctx.db.query("syncAuditLog")
+            .withIndex("by_domain", (q) => q.eq("domain", args.domain))
+            .collect();
+        if (count.length >= 500 && old.length > 0) {
+            await ctx.db.delete(old[0]._id);
+        }
+        return await ctx.db.insert("syncAuditLog", {
+            ...args,
+            syncedAt: Date.now(),
+        });
+    },
+});
+
+/**
+ * List recent sync audit entries.
+ */
+export const listSyncAudit = query({
+    args: { domain: v.optional(v.string()), limit: v.optional(v.number()) },
+    returns: v.array(
+        v.object({
+            _id: v.id("syncAuditLog"),
+            _creationTime: v.number(),
+            domain: v.string(),
+            inserted: v.optional(v.number()),
+            updated: v.optional(v.number()),
+            unchanged: v.optional(v.number()),
+            deleted: v.optional(v.number()),
+            upserted: v.optional(v.number()),
+            failed: v.optional(v.number()),
+            error: v.optional(v.string()),
+            status: v.string(),
+            syncedAt: v.number(),
+        })
+    ),
+    handler: async (ctx, args) => {
+        const takeCount = args.limit ?? 50;
+        let entries;
+        if (args.domain) {
+            entries = await ctx.db
+                .query("syncAuditLog")
+                .withIndex("by_domain", (q) => q.eq("domain", args.domain!))
+                .order("desc")
+                .take(takeCount);
+        } else {
+            entries = await ctx.db
+                .query("syncAuditLog")
+                .withIndex("by_syncedAt")
+                .order("desc")
+                .take(takeCount);
+        }
+        return entries.map((e) => ({
+            _id: e._id,
+            _creationTime: e._creationTime,
+            domain: e.domain,
+            inserted: e.inserted,
+            updated: e.updated,
+            unchanged: e.unchanged,
+            deleted: e.deleted,
+            upserted: e.upserted,
+            failed: e.failed,
+            error: e.error,
+            status: e.status,
+            syncedAt: e.syncedAt,
+        }));
+    },
+});
