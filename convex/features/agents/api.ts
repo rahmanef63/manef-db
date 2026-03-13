@@ -98,26 +98,99 @@ export const getAgents = query({
     },
 });
 
+async function enqueueAgentOutbox(
+    ctx: { db: { insert: (...args: any[]) => Promise<any> } },
+    agentId: string,
+    operation: string,
+    payload: unknown,
+) {
+    const now = Date.now();
+    const eventId = `agent:${agentId}:${operation}:${now}`;
+    return await ctx.db.insert("syncOutbox", {
+        attemptCount: 0,
+        createdAt: now,
+        entityKey: agentId,
+        entityType: "agent",
+        eventId,
+        operation,
+        payload,
+        processedAt: undefined,
+        source: "dashboard",
+        status: "pending",
+        updatedAt: now,
+    });
+}
+
 /**
- * Deploys a new agent (mock mutation).
+ * Deploys a new agent (Convex-side draft only — real agent creation requires OpenClaw CLI).
  */
 export const deployAgent = mutation({
     args: {
         name: v.string(),
         role: v.string(),
-        description: v.optional(v.string())
+        description: v.optional(v.string()),
+        tenantId: v.optional(v.string()),
     },
     returns: v.id("agents"),
     handler: async (ctx, args) => {
-        return await ctx.db.insert("agents", {
-            agentId: "agent_" + Math.floor(Math.random() * 1000000),
+        const agentId = `draft_${args.name.toLowerCase().replace(/\s+/g, "-")}_${Date.now()}`;
+        const id = await ctx.db.insert("agents", {
+            agentId,
             name: args.name,
             type: args.role,
             agentsMd: args.description,
-            status: "active",
+            status: "draft",
+            tenantId: args.tenantId,
             createdAt: Date.now(),
             updatedAt: Date.now(),
         });
+        return id;
+    },
+});
+
+/**
+ * Update agent metadata — writes to Convex and enqueues outbox event for runtime write-through.
+ * Only updates fields safe to change from dashboard: model, name, description.
+ */
+export const updateAgent = mutation({
+    args: {
+        id: v.id("agents"),
+        name: v.optional(v.string()),
+        model: v.optional(v.string()),
+        description: v.optional(v.string()),
+    },
+    returns: v.null(),
+    handler: async (ctx, args) => {
+        const { id, ...fields } = args;
+        const agent = await ctx.db.get(id);
+        if (!agent) throw new Error(`Agent ${id} not found`);
+        const patch: Record<string, unknown> = { updatedAt: Date.now() };
+        if (fields.name !== undefined) patch.name = fields.name;
+        if (fields.model !== undefined) patch.model = fields.model;
+        if (fields.description !== undefined) patch.agentsMd = fields.description;
+        await ctx.db.patch(id, patch);
+        await enqueueAgentOutbox(ctx, agent.agentId, "update", {
+            agentId: agent.agentId,
+            name: fields.name,
+            model: fields.model,
+        });
+        return null;
+    },
+});
+
+/**
+ * Archive a runtime agent (marks inactive in Convex, enqueues outbox for runtime).
+ * Only affects Convex mirror — cannot delete actual OpenClaw agent workspace from dashboard.
+ */
+export const archiveAgent = mutation({
+    args: { id: v.id("agents") },
+    returns: v.null(),
+    handler: async (ctx, args) => {
+        const agent = await ctx.db.get(args.id);
+        if (!agent) throw new Error(`Agent ${args.id} not found`);
+        await ctx.db.patch(args.id, { status: "inactive", updatedAt: Date.now() });
+        await enqueueAgentOutbox(ctx, agent.agentId, "archive", { agentId: agent.agentId });
+        return null;
     },
 });
 

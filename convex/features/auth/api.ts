@@ -366,6 +366,65 @@ export const getAuthProfile = query({
   },
 });
 
+/**
+ * Get registration request linked to the current viewer (by userId or phone).
+ * Used by non-admin users to self-service check their registration status.
+ */
+export const getMyRegistrationRequest = query({
+  args: { userId: v.id("authUsers") },
+  returns: v.union(
+    v.object({
+      _id: v.id("authRegistrationRequests"),
+      status: v.string(),
+      name: v.string(),
+      phone: v.string(),
+      context: v.string(),
+      matchedWorkspaceCount: v.number(),
+      matchedWorkspaceNames: v.array(v.string()),
+      reviewNote: v.optional(v.string()),
+      temporaryPasswordIssuedAt: v.optional(v.number()),
+      createdAt: v.number(),
+      updatedAt: v.number(),
+    }),
+    v.null()
+  ),
+  handler: async (ctx, args) => {
+    const authUser = await ctx.db.get(args.userId);
+    if (!authUser) return null;
+    // Find by authUserId link first, then fall back to phone match
+    let req = await ctx.db
+      .query("authRegistrationRequests")
+      .filter((q) => q.eq(q.field("authUserId"), args.userId))
+      .first();
+    if (!req && authUser.phone) {
+      req = await ctx.db
+        .query("authRegistrationRequests")
+        .filter((q) => q.eq(q.field("phone"), authUser.phone))
+        .first();
+    }
+    if (!req) return null;
+    // Resolve workspace names from matchedWorkspaceIds
+    const workspaceIds = req.matchedWorkspaceIds ?? [];
+    const workspaceDocs = await Promise.all(workspaceIds.map((id) => ctx.db.get(id)));
+    const matchedWorkspaceNames = workspaceDocs
+      .filter(Boolean)
+      .map((w: any) => w.label ?? w.slug ?? w._id);
+    return {
+      _id: req._id,
+      status: req.status,
+      name: req.name,
+      phone: req.phone,
+      context: req.context,
+      matchedWorkspaceCount: workspaceIds.length,
+      matchedWorkspaceNames,
+      reviewNote: req.reviewNote,
+      temporaryPasswordIssuedAt: req.temporaryPasswordIssuedAt,
+      createdAt: req.createdAt,
+      updatedAt: req.updatedAt,
+    };
+  },
+});
+
 export const getAuthProfileByEmail = query({
   args: {
     email: v.string(),
